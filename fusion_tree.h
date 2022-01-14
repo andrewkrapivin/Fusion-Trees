@@ -1,9 +1,12 @@
+#ifndef FUSION_TREE_H_INCLUDED
+#define FUSION_TREE_H_INCLUDED
+
 #include <immintrin.h>
 #include <cstdint>
 
 #define MAX_FUSION_SIZE 16
 
-using namespace std; //maybe stop doing this
+using namespace std; //maybe stop doing this. Ok definitely stop doing
 
 typedef struct {
 	uint8_t size;
@@ -18,6 +21,8 @@ typedef struct {
 	 //idk what to do with this but this struct remains 64 bits from a 512 bit struct so this could store stuff about children which could speed up balancing
 	fusion_metadata meta;
 } fusion_tree;
+
+extern const fusion_tree Empty_Fusion_Tree;
 
 /*typedef struct fast_insert_tree {
 	fustion_tree tree;
@@ -37,10 +42,11 @@ typedef struct {
 	
 }*/
 
+//are tehse even neccesary? Am I being ridiculous with all those instructions? Maybe better to just get vec[pos] like that?	
 uint64_t get_uint64_from_m256(__m256i vec, int pos);
 uint64_t get_uint64_from_m512(__m512i vec, int pos);
 
-int first_diff_bit_pos(__m512i x, __m512i y);
+int first_diff_bit_pos(__m512i x, __m512i y); // seems works
 
 int get_bit_from_pos(__m256i key, int pos);
 int get_bit_from_pos(__m512i key, int pos);
@@ -49,7 +55,7 @@ __m256i setbit_each_epi16_in_range(__m256i src, int epi16pos, int low, int high,
 
 bool full(fusion_node* node);
 
-uint16_t extract_bits(fusion_tree* tree, __m512i key);
+uint16_t extract_bits(fusion_tree* tree, __m512i key); // seems works
 
 __m256i compare_mask(fusion_node* node, uint16_t basemask);
 
@@ -73,9 +79,10 @@ __m256i shift_mask(__m256i maskvec, int pos); //moves the bits to the left of po
 
 uint16_t shift_maskling(uint16_t mask, int pos);
 
-void add_position_to_extraction_mask(fusion_tree* tree, int pos_in_key);
+void add_position_to_extraction_mask(fusion_tree* tree, int pos_in_key); // seems works
 
 int insert(fusion_node* node, __m512i key);
 
 int query_branch(fusion_node* node, __m512i key);
 
+#endif 

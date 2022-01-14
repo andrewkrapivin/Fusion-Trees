@@ -1,7 +1,7 @@
 #include "fusion_tree.h"
 
-#include <iostream>
 #include <algorithm>
+#include <iostream>
 
 uint64_t get_uint64_from_m256(__m256i vec, int pos) {
 	__mmask8 pos_mask = _cvtu32_mask8(1 << pos);
@@ -79,13 +79,14 @@ bool full(fusion_node* node){
 	return node->tree.meta.size == MAX_FUSION_SIZE;
 }
 
+//wow big endian vs little endian really really sucks, but I think this function works
 uint16_t extract_bits(fusion_tree* tree, __m512i key) {
 	__m512i extractedbytes = _mm512_maskz_compress_epi8(tree->byte_extract, key);
 	__m128i lowerbytes = _mm512_extracti64x2_epi64(extractedbytes, 0);
 	uint64_t ebyteslong[2];
 	ebyteslong[0] = _mm_extract_epi64(lowerbytes, 0);
 	ebyteslong[1] = _mm_extract_epi64(lowerbytes, 1); //better way to do this?
-	return (_pext_u64(ebyteslong[0], tree->bitextract[1]) << 8) + _pext_u64(ebyteslong[0], tree->bitextract[1]);
+	return (_pext_u64(ebyteslong[1], tree->bitextract[1]) << _mm_popcnt_u64(tree->bitextract[0])) + _pext_u64(ebyteslong[0], tree->bitextract[0]);
 }
 
 __m256i compare_mask(fusion_node* node, uint16_t basemask) {
@@ -95,11 +96,15 @@ __m256i compare_mask(fusion_node* node, uint16_t basemask) {
 
 int search_position(fusion_node* node, uint16_t basemask, const bool geq /*= true*/) {
 	__m256i cmpmask = compare_mask(node, basemask);
-	__mmask16 geq_mask = _mm256_cmp_epi16_mask(node->tree.treebits, cmpmask, _MM_CMPINT_LE);
-	if(!geq) {
+	__mmask16 geq_mask;
+	if(geq)
+		geq_mask = _mm256_cmp_epi16_mask(node->tree.treebits, cmpmask, _MM_CMPINT_LE);
+	else
 		geq_mask = _mm256_cmp_epi16_mask(node->tree.treebits, cmpmask, _MM_CMPINT_LT);
-	}
-	return _mm_popcnt_u32(_cvtmask16_u32(geq_mask));
+	uint16_t converted = _cvtmask16_u32(geq_mask);
+	//we need to ignore comparisons with stuff where its beyond the size!!!!
+
+	return _mm_popcnt_u32(converted & ((1 << node->tree.meta.size) - 1));
 }
 
 //returns the position in the array of the largest element less than or equal to the basemask
@@ -218,18 +223,29 @@ void add_position_to_extraction_mask(fusion_tree* tree, int pos_in_key) {
 	
 	uint64_t byte_extract_ll = _cvtmask64_u64(tree->byte_extract);
 	int numbelow = _mm_popcnt_u64(byte_extract_ll & ((1ll << byte_in_key) - 1));
-	
+	//cout << "num below: " << numbelow << endl;
 	//if we changed byte extract, then we need to shift the bit extract over by one byte, which we can do with avx. Otherwise we just need to add the corresponding bit to bit extract
 	if(!_kortestz_mask64_u8(_kxor_mask64(new_byte_extract, tree->byte_extract), 0)) { //kortest gives one if the or is all zeros, but we want the two numbers to be different and thus not all zeros
+		//cout << "SHIFTING STUFF" << endl;
 		__m128i bitextract_to_shift = _mm_lddqu_si128((const __m128i*)&tree->bitextract[0]);
-		__mmask16 expand_mmask = _cvtu32_mask16 (!(1 << numbelow));
-		_mm_store_si128((__m128i*)&tree->bitextract[0], _mm_maskz_expand_epi8(expand_mmask, bitextract_to_shift));
+		__mmask16 expand_mmask = _cvtu32_mask16 (~(1 << numbelow));
+		//cout << (~(1 << numbelow)) << " " << expand_mmask << " " << tree->bitextract[0] << endl;
+		_mm_storeu_si128((__m128i*)&tree->bitextract[0], _mm_maskz_expand_epi8(expand_mmask, bitextract_to_shift));
+		//cout << (~(1 << numbelow)) << " " << expand_mmask << " " << tree->bitextract[0] << endl;
 	}
-	
-	tree->bitextract[numbelow/8] |= (1 << (((numbelow%8) * 8) + pos_in_key%8));
+	tree->bitextract[numbelow/8] |= (1ull << (((numbelow%8) * 8) + pos_in_key%8));
+	//cout << tree->bitextract[0] << endl;
+	tree->byte_extract = new_byte_extract;
 }
 
+//add option for when the tree is empty! Cause then we really don't want to update anything, just add the key!
 int insert(fusion_node* node, __m512i key) {
+	if(node->tree.meta.size == 0) { //Should we assume that key_positions[0] is zero?
+		node->keys[0] = key;
+		node->tree.meta.size++;
+		return 1;
+	}
+
 	if(node->tree.meta.size == MAX_FUSION_SIZE)
 		return -1;
 		
@@ -257,8 +273,12 @@ int insert(fusion_node* node, __m512i key) {
 		//and we also shift the mask itself! And set the corresponding bit to the corresponding value
 		first_basemask = shift_maskling(first_basemask, mask_pos);
 		first_basemask |= diff_bit_val << mask_pos;
+
+		cout << "CHECK CHECK" << endl;
 		
 		add_position_to_extraction_mask(&node->tree, diff_bit_pos);
+
+		cout << "CHECK CHECK" << endl;
 		
 		//if its an unseen bit then we need to query first_guess_pos again to find where the actual insert position should be. Obviously this is pretty bad code, so fix this.
 		first_guess_pos = search_partial_pos_tree(node, first_basemask, mask_pos, need_highest);
@@ -269,6 +289,8 @@ int insert(fusion_node* node, __m512i key) {
 	int low_pos = need_highest ? first_guess_pos : search_partial_pos_tree(node, first_basemask, mask_pos, false);
 	
 	int high_pos = need_highest ? search_partial_pos_tree(node, first_basemask, mask_pos, true) : first_guess_pos;
+	cout << first_guess_pos << endl;
+	cout << low_pos << " " << high_pos << " " << need_highest << endl;
 	
 	//we need to set ignore mask to not ignore positions here
 	node->ignore_mask = setbit_each_epi16_in_range(node->ignore_mask, mask_pos, low_pos, high_pos);
@@ -309,20 +331,3 @@ int query_branch(fusion_node* node, __m512i key) {
 	int second_guess_pos = search_partial_pos_tree(node, first_basemask, mask_pos, !diff_bit_val); //fix this!
 	return second_guess_pos;
 }
-
-
-int main(){
-	__m512i A = {0, 1, 0, 0, 1, 0, 0, 0};
-	__m512i B = {0, 0, 0, 0, 0, 0, 0, 0};
-	
-	for(int i = 0; i < 8; i++) {
-		cout << A[i] << " " << sizeof(A[i]) << " "; 
-	}
-	
-	cout << _lzcnt_u32(1) << endl;
-	
-	cout << first_diff_bit_pos(A, B) << endl;
-	
-	cout << (1ll << 64) << endl;
-}
-
