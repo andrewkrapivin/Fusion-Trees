@@ -29,6 +29,10 @@ int first_diff_bit_pos(__m512i x, __m512i y) {//there is def some confusion here
 	unsigned int nzr = _cvtmask16_u32(nonzero_pieces);
 	if(nzr == 0) return -1; //-1 means the numbers are the same
 	unsigned int significant_one_index = _tzcnt_u32(nzr);
+
+
+
+	
 	//cout << significant_one_index << endl;
 	__mmask16 significant_one_mask = _cvtu32_mask16(1 << significant_one_index);
 	//__m128i nzbytes = _mm512_extracti64x2_epi64(z, significant_one_index/2);
