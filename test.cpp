@@ -74,12 +74,14 @@ void print_node_info(fusion_node& test_node) {
     cout << "Tree and ignore bits:" << endl;
     print_vec(test_node.tree.treebits, true, 16);
     print_vec(test_node.ignore_mask, true, 16);
+    cout << "Sorted to real positions:" << endl;
+    print_vec(test_node.key_positions, true, 8);
 }
 
 int main(){
     unsigned seed = chrono::steady_clock::now().time_since_epoch().count();
-    //we made this work! 2767760278, 3339913857, 3110249540(4 tests), 3998269307 (size 8!), 4151455078 (size 8)
-    mt19937 generator (2969908123);
+    //we made this work! 2767760278, 3339913857, 3110249540(4 tests), 3998269307 (size 8!), 4151455078 (size 8), 2969908123 (this was just because I didn't generate unique random vectors), 1262589155 (fixed mask_pos for tmp>=8, but also some weird behavior?)
+    mt19937 generator (seed);
 
 	__m512i A = {0, 1, 0, 0, 0, 0, 0, 3}; //we treat the number as little endian, cause otherwise it is inconsistent.
     //Cause the CPU stores each number as little endian, and for let's say the 65th digit to be one, we initialize it as in A, which is really weird to think about, because the earlier numbers are more significant as normal, but then within the numbers its the opposite, but, well, whatever
@@ -189,8 +191,8 @@ int main(){
     cout << _tzcnt_u32(1) << endl;*/
 
     //The Real Test
-    int numtests=50;
-    constexpr int sizetests=8;
+    int numtests=1000;
+    constexpr int sizetests=16;
     int numfailed=0;
     int failedindex=-1;
     int testindex=-1;
@@ -201,6 +203,7 @@ int main(){
         vector<int> positions = generate_random_positions(generator, sizetests);
         for(int j=0; j<sizetests; j++) {
             randomlist[j] = gen_vec_one_bit(positions[j]);
+            //randomlist[j] = gen_random_vec(generator);
         }
         if(testindex!=-1 && testindex!=i) continue;
 

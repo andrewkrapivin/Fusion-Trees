@@ -173,15 +173,19 @@ int diff_bit_to_mask_pos(fusion_node* node, unsigned int diffpos) {
 	unsigned int diffposbyte = diffpos/8;
 	bool test_specific_bits = byte_extract_ll & (1ll << diffposbyte);
 	int numbelow = _mm_popcnt_u64(byte_extract_ll & ((1ll << diffposbyte) - 1));
-	//cout << "diffposbyte: " << diffposbyte << ", numbelow " << numbelow << ", test specific bits " << test_specific_bits << ", byte_extract_ll " << byte_extract_ll << endl;
+	cout << "diffposbyte: " << diffposbyte << ", numbelow " << numbelow << ", test specific bits " << test_specific_bits << ", byte_extract_ll " << byte_extract_ll << endl;
 	int maskpos = 0;
 	if(numbelow > 0) {
 		uint64_t tmp = min(numbelow, 8) * 8;
-		maskpos += _mm_popcnt_u64(node->tree.bitextract[0] & ((1ll << tmp) - 1ll));
+		cout << ((1ll << tmp) - 1ll) << ", " << (1ll << tmp) << ", " << tmp <<  endl; // um why is (1ll << 64) equal to 1 that makes absolutely no sense
+		uint64_t extract_mask = tmp == 64 ? (- 1ll) : ((1ll << tmp) - 1ll);
+		maskpos += _mm_popcnt_u64(node->tree.bitextract[0] & extract_mask);
 	}
 	if(numbelow > 8) {
 		uint64_t tmp = min(numbelow-8, 8) * 8;
+		//uint64_t extract_mask = tmp == 64 ? (- 1ll) : ((1ll << tmp) - 1ll);
 		maskpos += _mm_popcnt_u64(node->tree.bitextract[1] & ((1ll << tmp) - 1ll));
+		//maskpos += _mm_popcnt_u64(node->tree.bitextract[1] & extract_mask);
 	}
 	if(test_specific_bits) {
 		uint8_t tmp = *((uint8_t*)node->tree.bitextract + numbelow);
@@ -393,6 +397,8 @@ int query_branch(fusion_node* node, __m512i key) {
 	__m512i first_guess = get_key_from_sorted_pos(node, first_guess_pos);
 	
 	int diff_bit_pos = first_diff_bit_pos(first_guess, key);
+
+	cout << "Query guess: " << first_guess_pos << ", basemask: " << first_basemask << ", diff_bit_pos: " << diff_bit_pos << endl;
 	
 	if (diff_bit_pos == -1) { //key is already in there
 		return ~first_guess_pos; //idk if its negative then let's say you've found the exact key
@@ -400,6 +406,6 @@ int query_branch(fusion_node* node, __m512i key) {
 	
 	int mask_pos = diff_bit_to_mask_pos(node, diff_bit_pos);
 	int diff_bit_val = get_bit_from_pos(key, diff_bit_pos);
-	int second_guess_pos = search_partial_pos_tree(node, first_basemask, mask_pos, !diff_bit_val); //fix this!
+	int second_guess_pos = search_partial_pos_tree(node, first_basemask, abs(mask_pos), !diff_bit_val); //fix this!!
 	return second_guess_pos;
 }
