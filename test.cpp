@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <algorithm>
 #include <cstring>
+#include <set>
 
 __m512i gen_random_vec(mt19937& generator) {
     __m512i A;
@@ -26,6 +27,32 @@ __m512i gen_random_vec_one_bit(mt19937& generator) {
     __mmask64 k = _cvtu64_mask64(1ull << posbyte);
     std::uniform_int_distribution<uint64_t> temporary_distribution2(0, 7);
     uint64_t posbit = temporary_distribution2(generator);
+    A = _mm512_maskz_set1_epi8 (k, (1ull << posbit));
+    /*cout << "Generated random bit at byte " << posbyte << " and bit " << posbit << endl;
+    print_binary_uint64(_cvtmask64_u64(k), true);
+    print_binary_uint64((1ull << posbit), true);
+    print_vec(A, true, 8);*/
+    return A;
+}
+
+vector<int> generate_random_positions(mt19937& generator, int count, int maxpos=511){
+    set<int> tmp;
+    std::uniform_int_distribution<uint64_t> temporary_distribution(0, maxpos);
+    while(tmp.size() < count) {
+        tmp.insert(temporary_distribution(generator));
+    }
+    vector<int> random_pos;
+    for (std::set<int>::iterator it=tmp.begin(); it!=tmp.end(); ++it)
+        random_pos.push_back(*it);
+    shuffle(random_pos.begin(), random_pos.end(), generator);
+    return random_pos;
+}
+
+__m512i gen_vec_one_bit(int bit_pos) {
+    __m512i A;
+    uint64_t posbyte = bit_pos/8;
+    __mmask64 k = _cvtu64_mask64(1ull << posbyte);
+    uint64_t posbit = bit_pos%8;
     A = _mm512_maskz_set1_epi8 (k, (1ull << posbit));
     /*cout << "Generated random bit at byte " << posbyte << " and bit " << posbit << endl;
     print_binary_uint64(_cvtmask64_u64(k), true);
@@ -57,7 +84,7 @@ int main(){
 	__m512i A = {0, 1, 0, 0, 0, 0, 0, 3}; //we treat the number as little endian, cause otherwise it is inconsistent.
     //Cause the CPU stores each number as little endian, and for let's say the 65th digit to be one, we initialize it as in A, which is really weird to think about, because the earlier numbers are more significant as normal, but then within the numbers its the opposite, but, well, whatever
     //Little/big endian is pretty annoying
-	__m512i B = {0, 2, 0, 0, 0, 0, 0, 0};
+	__m512i B = {0, 0, 0, 0, 0, 0, 0, 0};
 	
 	__m512i X = gen_random_vec(generator);
     print_vec(X, true);
@@ -166,13 +193,14 @@ int main(){
     constexpr int sizetests=8;
     int numfailed=0;
     int failedindex=-1;
-    int testindex=17;
+    int testindex=-1;
     for(int i=0; i<numtests; i++) {
         memcpy(&test_node, &Empty_Fusion_Node, sizeof(fusion_node));
         vector<__m512i> randomlist(sizetests);
         //vector<vector<uint64_t>> randomlistvec(16);
+        vector<int> positions = generate_random_positions(generator, sizetests);
         for(int j=0; j<sizetests; j++) {
-            randomlist[j] = gen_random_vec_one_bit(generator);
+            randomlist[j] = gen_vec_one_bit(positions[j]);
         }
         if(testindex!=-1 && testindex!=i) continue;
 
@@ -181,9 +209,13 @@ int main(){
             print_vec(randomlist[j], true);
             insert(&test_node, randomlist[j]);
             print_node_info(test_node);
+            cout << "Inserted the " << j << "th thing" << endl;
         }
-        for(int j=0; j<sizetests; j++) {
+        /*for(int j=0; j<sizetests; j++) {
             print_binary_uint64_big_endian(randomlist[j][7], true, 64, 8);
+        }*/
+        for(int j=0; j<sizetests; j++) {
+            cout << first_diff_bit_pos(B, randomlist[j]) << endl;
         }
         sort(randomlist.begin(), randomlist.end(), compare__m512i);
         for(int j=0; j<sizetests; j++) {
