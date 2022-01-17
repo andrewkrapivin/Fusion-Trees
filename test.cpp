@@ -19,6 +19,19 @@ __m512i gen_random_vec(mt19937& generator) {
     return A;
 }
 
+__m512i gen_random_vec_one_bit(mt19937& generator) {
+    __m512i A;
+    std::uniform_int_distribution<uint64_t> temporary_distribution1(0, 7);
+    __mmask8 k = temporary_distribution1(generator);
+    std::uniform_int_distribution<uint64_t> temporary_distribution2(0, 63);
+    A = _mm512_maskz_set1_epi64 (k, (1ull << temporary_distribution2(generator)));
+    return A;
+}
+
+__m512i gen_random_vec_all_but_one_bit(mt19937& generator) {
+    return _mm512_andnot_si512(gen_random_vec_one_bit(generator), _mm512_set1_epi8(255));
+}
+
 void print_node_info(fusion_node& test_node) {
     cout << "Extraction mask:" << endl;
     print_binary_uint64(test_node.tree.byte_extract, true);
@@ -153,7 +166,7 @@ int main(){
         vector<__m512i> randomlist(sizetests);
         //vector<vector<uint64_t>> randomlistvec(16);
         for(int j=0; j<sizetests; j++) {
-            randomlist[j] = gen_random_vec(generator);
+            randomlist[j] = gen_random_vec_one_bit(generator);
         }
         if(testindex!=-1 && testindex!=i) continue;
 
