@@ -38,6 +38,8 @@ typedef struct {
 	__m512i keys[MAX_FUSION_SIZE];
 } fusion_node;
 
+extern const fusion_node Empty_Fusion_Node;
+
 /*typedef struct fast_fusion_node {
 	
 }*/
@@ -50,6 +52,8 @@ int first_diff_bit_pos(__m512i x, __m512i y); // seems works
 
 int get_bit_from_pos(__m256i key, int pos);
 int get_bit_from_pos(__m512i key, int pos);
+
+bool compare__m512i(__m512i a, __m512i b);
 
 __m256i setbit_each_epi16_in_range(__m256i src, int epi16pos, int low, int high, int bit = 1);
 
@@ -72,6 +76,7 @@ __m512i search_key(fusion_node* node, uint16_t basemask);
 int diff_bit_to_mask_pos(fusion_node* node, unsigned int diffpos);
 
 __m256i insert_mask(__m256i maskvec, uint16_t mask, int pos, bool right); //insert 16 bit mask into some position (specifying which mask)
+__m256i insert_partial_duplicate_mask(__m256i maskvec, int pos, bool right, int cuttoff_pos);
 
 __m128i insert_sorted_pos_to_key_positions(__m128i key_positions, uint8_t sorted_pos, uint8_t real_pos, bool right);
 
@@ -83,6 +88,6 @@ void add_position_to_extraction_mask(fusion_tree* tree, int pos_in_key); // seem
 
 int insert(fusion_node* node, __m512i key);
 
-int query_branch(fusion_node* node, __m512i key);
+int query_branch(fusion_node* node, __m512i key); //for now returns the bitwise complement if key is found
 
 #endif 
