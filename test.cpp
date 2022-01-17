@@ -21,10 +21,16 @@ __m512i gen_random_vec(mt19937& generator) {
 
 __m512i gen_random_vec_one_bit(mt19937& generator) {
     __m512i A;
-    std::uniform_int_distribution<uint64_t> temporary_distribution1(0, 7);
-    __mmask8 k = temporary_distribution1(generator);
-    std::uniform_int_distribution<uint64_t> temporary_distribution2(0, 63);
-    A = _mm512_maskz_set1_epi64 (k, (1ull << temporary_distribution2(generator)));
+    std::uniform_int_distribution<uint64_t> temporary_distribution1(0, 63);
+    uint64_t posbyte = temporary_distribution1(generator);
+    __mmask64 k = _cvtu64_mask64(1ull << posbyte);
+    std::uniform_int_distribution<uint64_t> temporary_distribution2(0, 7);
+    uint64_t posbit = temporary_distribution2(generator);
+    A = _mm512_maskz_set1_epi8 (k, (1ull << posbit));
+    /*cout << "Generated random bit at byte " << posbyte << " and bit " << posbit << endl;
+    print_binary_uint64(_cvtmask64_u64(k), true);
+    print_binary_uint64((1ull << posbit), true);
+    print_vec(A, true, 8);*/
     return A;
 }
 
@@ -46,7 +52,7 @@ void print_node_info(fusion_node& test_node) {
 int main(){
     unsigned seed = chrono::steady_clock::now().time_since_epoch().count();
     //we made this work! 2767760278, 3339913857, 3110249540(4 tests), 3998269307 (size 8!), 4151455078 (size 8)
-    mt19937 generator (seed);
+    mt19937 generator (2969908123);
 
 	__m512i A = {0, 1, 0, 0, 0, 0, 0, 3}; //we treat the number as little endian, cause otherwise it is inconsistent.
     //Cause the CPU stores each number as little endian, and for let's say the 65th digit to be one, we initialize it as in A, which is really weird to think about, because the earlier numbers are more significant as normal, but then within the numbers its the opposite, but, well, whatever
@@ -156,11 +162,11 @@ int main(){
     cout << _tzcnt_u32(1) << endl;*/
 
     //The Real Test
-    int numtests=1600;
-    constexpr int sizetests=16;
+    int numtests=50;
+    constexpr int sizetests=8;
     int numfailed=0;
     int failedindex=-1;
-    int testindex=-1;
+    int testindex=17;
     for(int i=0; i<numtests; i++) {
         memcpy(&test_node, &Empty_Fusion_Node, sizeof(fusion_node));
         vector<__m512i> randomlist(sizetests);
