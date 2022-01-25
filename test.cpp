@@ -88,10 +88,10 @@ int main(){
     //Little/big endian is pretty annoying
 	__m512i B = {0, 0, 0, 0, 0, 0, 0, 0};
 	
-	__m512i X = gen_random_vec(generator);
-    print_vec(X, true);
-    cout << first_diff_bit_pos(A, B) << endl;
-    cout << first_diff_bit_pos(B, X) << endl;
+	//__m512i X = gen_random_vec(generator);
+    //print_vec(B, true);
+    /*cout << first_diff_bit_pos(A, B) << endl;
+    cout << first_diff_bit_pos(B, X) << endl;*/
 
     /*print_binary_uint64(65, true);
     print_hex_uint64(65, true);
@@ -191,50 +191,53 @@ int main(){
     cout << _tzcnt_u32(1) << endl;*/
 
     //The Real Test
-    int numtests=1000;
-    constexpr int sizetests=16;
+    int numtests=10;
+    constexpr int sizetests=1;
     int numfailed=0;
     int failedindex=-1;
     int testindex=-1;
     for(int i=0; i<numtests; i++) {
         memcpy(&test_node, &Empty_Fusion_Node, sizeof(fusion_node));
-        vector<__m512i> randomlist(sizetests);
+        __m512i randomlist[sizetests];
         //vector<vector<uint64_t>> randomlistvec(16);
         vector<int> positions = generate_random_positions(generator, sizetests);
         for(int j=0; j<sizetests; j++) {
-            randomlist[j] = gen_vec_one_bit(positions[j]);
-            //randomlist[j] = gen_random_vec(generator);
+            uniform_int_distribution<uint64_t> temporary_distribution(0, 1);
+            if(temporary_distribution(generator))
+                randomlist[j] = gen_vec_one_bit(positions[j]);
+            else 
+                randomlist[j] = gen_random_vec(generator);
         }
         if(testindex!=-1 && testindex!=i) continue;
 
         for(int j=0; j<sizetests; j++) {
-            cout << "Inserting: ";
-            print_vec(randomlist[j], true);
+            /*cout << "Inserting: ";
+            print_vec(randomlist[j], true);*/
             insert(&test_node, randomlist[j]);
-            print_node_info(test_node);
-            cout << "Inserted the " << j << "th thing" << endl;
+            /*print_node_info(test_node);
+            cout << "Inserted the " << j << "th thing" << endl;*/
         }
         /*for(int j=0; j<sizetests; j++) {
             print_binary_uint64_big_endian(randomlist[j][7], true, 64, 8);
         }*/
-        for(int j=0; j<sizetests; j++) {
+        /*for(int j=0; j<sizetests; j++) {
             cout << first_diff_bit_pos(B, randomlist[j]) << endl;
-        }
-        sort(randomlist.begin(), randomlist.end(), compare__m512i);
-        for(int j=0; j<sizetests; j++) {
+        }*/
+        sort(randomlist, randomlist+sizetests, compare__m512i);
+        /*for(int j=0; j<sizetests; j++) {
             print_vec(randomlist[j], true);
-        }
+        }*/
         for(int j=0; j<sizetests; j++){
             int branch = query_branch(&test_node, randomlist[j]);
             if(branch >= 0) {
-                cout << "Failed test " << i << ", and didn't even think the key was there" << endl;
+                //cout << "Failed test " << i << ", and didn't even think the key was there" << endl;
                 numfailed++;
                 failedindex=i;
                 break;
             }
             branch = ~branch;
             if(branch != j) {
-                cout << "Failed test " << i << " at node " << j << endl;
+                //cout << "Failed test " << i << " at node " << j << endl;
                 numfailed++;
                 failedindex=i;
                 break;

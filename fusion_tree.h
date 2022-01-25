@@ -57,7 +57,7 @@ bool compare__m512i(__m512i a, __m512i b);
 
 __m256i setbit_each_epi16_in_range(__m256i src, int epi16pos, int low, int high, int bit = 1);
 
-bool full(fusion_node* node);
+bool node_full(fusion_node* node);
 
 uint16_t extract_bits(fusion_tree* tree, __m512i key); // seems works
 

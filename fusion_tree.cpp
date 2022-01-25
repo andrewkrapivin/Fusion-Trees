@@ -92,7 +92,7 @@ __m256i setbit_each_epi16_in_range(__m256i src, int epi16pos, int low, int high,
 	return _mm256_or_si256(src, addvec);
 }
 
-bool full(fusion_node* node){
+bool node_full(fusion_node* node){
 	return node->tree.meta.size == MAX_FUSION_SIZE;
 }
 
@@ -151,7 +151,7 @@ int search_pos_tree(fusion_node* node, uint16_t basemask) {
 int search_partial_pos_tree(fusion_node* node, uint16_t basemask, int cutoff_pos, bool largest) {
 	uint16_t partial_basemask = basemask & (~((1 << cutoff_pos) - 1)); //remember to use ~ not ! for bitwise lol
 	partial_basemask = largest ? (partial_basemask + ((1 << cutoff_pos) - 1)) : partial_basemask;
-	cout << "cutoff_pos is " << cutoff_pos << ", partial basemask is " << partial_basemask << " FDSFSD " << search_pos_arr(node, partial_basemask) <<  endl;
+	//cout << "cutoff_pos is " << cutoff_pos << ", partial basemask is " << partial_basemask << " FDSFSD " << search_pos_arr(node, partial_basemask) <<  endl;
 	return search_pos_arr(node, partial_basemask);
 }
 
@@ -173,11 +173,11 @@ int diff_bit_to_mask_pos(fusion_node* node, unsigned int diffpos) {
 	unsigned int diffposbyte = diffpos/8;
 	bool test_specific_bits = byte_extract_ll & (1ll << diffposbyte);
 	int numbelow = _mm_popcnt_u64(byte_extract_ll & ((1ll << diffposbyte) - 1));
-	cout << "diffposbyte: " << diffposbyte << ", numbelow " << numbelow << ", test specific bits " << test_specific_bits << ", byte_extract_ll " << byte_extract_ll << endl;
+	//cout << "diffposbyte: " << diffposbyte << ", numbelow " << numbelow << ", test specific bits " << test_specific_bits << ", byte_extract_ll " << byte_extract_ll << endl;
 	int maskpos = 0;
 	if(numbelow > 0) {
 		uint64_t tmp = min(numbelow, 8) * 8;
-		cout << ((1ll << tmp) - 1ll) << ", " << (1ll << tmp) << ", " << tmp <<  endl; // um why is (1ll << 64) equal to 1 that makes absolutely no sense
+		//cout << ((1ll << tmp) - 1ll) << ", " << (1ll << tmp) << ", " << tmp <<  endl; // um why is (1ll << 64) equal to 1 that makes absolutely no sense
 		uint64_t extract_mask = tmp == 64 ? (- 1ll) : ((1ll << tmp) - 1ll);
 		maskpos += _mm_popcnt_u64(node->tree.bitextract[0] & extract_mask);
 	}
@@ -306,12 +306,12 @@ int insert(fusion_node* node, __m512i key) {
 	
 	int first_guess_pos = search_pos_tree(node, first_basemask);
 
-	cout << "The extracted mask is " << first_basemask << ", and the guess position is " << first_guess_pos << endl;
+	//cout << "The extracted mask is " << first_basemask << ", and the guess position is " << first_guess_pos << endl;
 	
 	__m512i first_guess = get_key_from_sorted_pos(node, first_guess_pos);
 	
 	int diff_bit_pos = first_diff_bit_pos(first_guess, key);
-	cout << "Diff bit pos is " << diff_bit_pos << endl;
+	//cout << "Diff bit pos is " << diff_bit_pos << endl;
 	
 	if (diff_bit_pos == -1) { //key is already in there
 		return -2;
@@ -319,7 +319,7 @@ int insert(fusion_node* node, __m512i key) {
 	
 	int mask_pos = diff_bit_to_mask_pos(node, diff_bit_pos);
 	int search_mask_pos = mask_pos;
-	cout << "mask pos is " << mask_pos <<  endl;
+	//cout << "mask pos is " << mask_pos <<  endl;
 	
 	int diff_bit_val = get_bit_from_pos(key, diff_bit_pos);
 	
@@ -327,23 +327,23 @@ int insert(fusion_node* node, __m512i key) {
 	
 	if (mask_pos >= 0) { //then we do not already have this bit in the "fusion tree." We thus need to shift our masks and stuff to include this bit
 		node->tree.treebits = shift_mask(node->tree.treebits, mask_pos);
-		cout << "Tree bits after shift" << endl;
-		print_vec(node->tree.treebits, true, 16);
+		//cout << "Tree bits after shift" << endl;
+		//print_vec(node->tree.treebits, true, 16);
 		//cout << "Ignore mask before shift" << endl;
 		//print_vec(node->ignore_mask, true, 16);
 		node->ignore_mask = shift_mask(node->ignore_mask, mask_pos);
-		cout << "Ignore mask after shift" << endl;
-		print_vec(node->ignore_mask, true, 16);
+		//cout << "Ignore mask after shift" << endl;
+		//print_vec(node->ignore_mask, true, 16);
 		//and we also shift the mask itself! And set the corresponding bit to the corresponding value
 		first_basemask = shift_maskling(first_basemask, mask_pos);
 		first_basemask |= diff_bit_val << mask_pos;
-		cout << "modified first_basemask is " << first_basemask << endl;
+		//cout << "modified first_basemask is " << first_basemask << endl;
 		
 		add_position_to_extraction_mask(&node->tree, diff_bit_pos);
 		
 		//increment search_mask_pos cause we want to search all the elements that are in the same subtree, but the bit defining the subtree has now increased, since we added a so far nonsense bit into the masks
 		search_mask_pos ++;
-		cout << "Search mask pos: " << search_mask_pos << endl;
+		//cout << "Search mask pos: " << search_mask_pos << endl;
 		//if its an unseen bit then we need to query first_guess_pos again to find where the actual insert position should be. Obviously this is pretty bad code, so fix this.
 	}
 	else {
@@ -356,8 +356,8 @@ int insert(fusion_node* node, __m512i key) {
 	int low_pos = need_highest ? first_guess_pos : search_partial_pos_tree(node, first_basemask, mask_pos+1, false);
 	
 	int high_pos = need_highest ? search_partial_pos_tree(node, first_basemask, mask_pos+1, true) : first_guess_pos;
-	cout << first_guess_pos << endl;
-	cout << low_pos << " " << high_pos << " " << need_highest << " " << first_basemask << endl;
+	//cout << first_guess_pos << endl;
+	//cout << low_pos << " " << high_pos << " " << need_highest << " " << first_basemask << endl;
 	
 	//we need to set ignore mask to not ignore positions here
 	node->ignore_mask = setbit_each_epi16_in_range(node->ignore_mask, mask_pos, low_pos, high_pos);
@@ -371,11 +371,11 @@ int insert(fusion_node* node, __m512i key) {
 	//here I am inserting just don't ignore any bits, but I am not 100% sure that is correct. Is easier to do this than copying the guy we're next to, but that might be necessary. Def check this
 	//node->ignore_mask = insert_mask(node->ignore_mask, -1, first_guess_pos, diff_bit_val); //lol fixing insert_mask took way longer than it should have
 	//Pretty sure I came up with a situation where the above is wrong, but didn't work it out. Just being safe then:
-	cout << "Duplicating mask " << first_guess_pos << " in ignore mask: " << endl;
-	cout << "Before: "; print_vec(node->ignore_mask, true, 16);
+	//cout << "Duplicating mask " << first_guess_pos << " in ignore mask: " << endl;
+	//cout << "Before: "; print_vec(node->ignore_mask, true, 16);
 	//actually we want to duplicate it only up to the bit which matters, so the mask_pos. Here I am really not sure its important either, but well let's be safe
 	node->ignore_mask = insert_partial_duplicate_mask(node->ignore_mask, first_guess_pos, diff_bit_val, mask_pos);
-	cout << "After: "; print_vec(node->ignore_mask, true, 16);
+	//cout << "After: "; print_vec(node->ignore_mask, true, 16);
 
 	//cause the mask we inserted for our new element might have extra bits set that it should not have
 	node->tree.treebits = _mm256_and_si256(node->tree.treebits, node->ignore_mask);
@@ -398,7 +398,7 @@ int query_branch(fusion_node* node, __m512i key) {
 	
 	int diff_bit_pos = first_diff_bit_pos(first_guess, key);
 
-	cout << "Query guess: " << first_guess_pos << ", basemask: " << first_basemask << ", diff_bit_pos: " << diff_bit_pos << endl;
+	//cout << "Query guess: " << first_guess_pos << ", basemask: " << first_basemask << ", diff_bit_pos: " << diff_bit_pos << endl;
 	
 	if (diff_bit_pos == -1) { //key is already in there
 		return ~first_guess_pos; //idk if its negative then let's say you've found the exact key
