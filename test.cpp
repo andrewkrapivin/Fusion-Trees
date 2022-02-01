@@ -1,5 +1,6 @@
 #include "fusion_tree.h"
 #include "HelperFuncs.h"
+#include "FusionBTree.h"
 
 #include <random>
 #include <chrono>
@@ -245,6 +246,40 @@ int main(){
         }
     }
     cout << "Num failed: " << numfailed << ", and one failed index (if any) is " << failedindex << endl;
+    
+    constexpr int bigtestsize = 500;
+    __m512i big_randomlist[bigtestsize];
+    fusion_b_node* root = NULL;
+    for(int i=0; i < bigtestsize; i++) {
+    	//cout << "inserting " << i << "th vector" << endl;
+    	big_randomlist[i] = gen_random_vec(generator);
+    	root = insert_full_tree(root, big_randomlist[i]);
+    	//print_binary_uint64_big_endian(big_randomlist[i][7], true, 64, 8);
+    	//print_binary_uint64_big_endian(big_randomlist[i][7], true);
+    	//print_vec(big_randomlist[i], true);
+    	//cout << ((int)root->fusion_internal_tree.tree.meta.size) << endl;
+    	//printTree(root);
+    }
+    sort(big_randomlist, big_randomlist+bigtestsize, compare__m512i);
+    for(int i=0; i < bigtestsize; i++) {
+    	//root = insert_full_tree(root, big_randomlist[i]);
+    }
+    for(int i=0; i < bigtestsize-1; i++) {
+    	//cout << "Searching ";
+    	//print_binary_uint64_big_endian(big_randomlist[i][7], true, 64, 8);
+    	__m512i* treesucc = successor(root, big_randomlist[i]);
+    	if(treesucc == NULL){
+    		cout << "treesuc is NULL" << endl;
+    	}
+    	else {
+    		if(first_diff_bit_pos(*treesucc, big_randomlist[i+1]) != -1) {
+    			cout << "Wrong at " << i << endl;
+    			print_binary_uint64_big_endian((*treesucc)[7], true, 64, 8);
+    			break;
+			}
+    	}
+    }
+    printTree(root);
     cout << "random seed is " << seed << endl;
 }
 

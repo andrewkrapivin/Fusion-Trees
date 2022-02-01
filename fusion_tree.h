@@ -67,7 +67,9 @@ int search_position(fusion_node* node, uint16_t basemask, const bool geq=true);
 int search_pos_arr(fusion_node* node, uint16_t basemask, const bool geq=true);
 int search_pos_tree(fusion_node* node, uint16_t basemask);
 int search_partial_pos_tree(fusion_node* node, uint16_t basemask, int cutoff_pos, bool largest);
+int search_partial_pos_tree2(fusion_node* node, uint16_t basemask, int cutoff_pos, bool largest);
 
+uint8_t get_real_pos_from_sorted_pos(fusion_node* node, int index_in_sorted);
 __m512i get_key_from_sorted_pos(fusion_node* node, int index_in_sorted);
 __m512i search_key(fusion_node* node, uint16_t basemask);
 
@@ -89,5 +91,7 @@ void add_position_to_extraction_mask(fusion_tree* tree, int pos_in_key); // seem
 int insert(fusion_node* node, __m512i key);
 
 int query_branch(fusion_node* node, __m512i key); //for now returns the bitwise complement if key is found
+
+void print_keys_sig_bits(fusion_node* node);
 
 #endif 

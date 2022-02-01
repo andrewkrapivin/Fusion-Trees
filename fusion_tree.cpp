@@ -155,6 +155,19 @@ int search_partial_pos_tree(fusion_node* node, uint16_t basemask, int cutoff_pos
 	return search_pos_arr(node, partial_basemask);
 }
 
+int search_partial_pos_tree2(fusion_node* node, uint16_t basemask, int cutoff_pos, bool largest) {
+	uint16_t partial_basemask = basemask & (~((1 << cutoff_pos) - 1)); //remember to use ~ not ! for bitwise lol
+	partial_basemask = largest ? (partial_basemask + ((1 << cutoff_pos) - 1)) : partial_basemask;
+	//cout << "cutoff_pos is " << cutoff_pos << ", partial basemask is " << partial_basemask << " FDSFSD " << search_pos_arr(node, partial_basemask) <<  endl;
+	return search_position(node, partial_basemask, largest);
+}
+uint8_t get_real_pos_from_sorted_pos(fusion_node* node, int index_in_sorted) {
+	__mmask16 pos_mask = _cvtu32_mask16((1 << index_in_sorted)); //we want the position of this element and the next position of course for our comparison
+	__m128i extracting_position = _mm_maskz_compress_epi8(pos_mask, node->key_positions);
+	uint8_t position = _mm_extract_epi8(extracting_position, 0);
+	return position;
+}
+
 __m512i get_key_from_sorted_pos(fusion_node* node, int index_in_sorted) {
 	__mmask16 pos_mask = _cvtu32_mask16((1 << index_in_sorted)); //we want the position of this element and the next position of course for our comparison
 	__m128i extracting_position = _mm_maskz_compress_epi8(pos_mask, node->key_positions);
@@ -294,7 +307,9 @@ void add_position_to_extraction_mask(fusion_tree* tree, int pos_in_key) {
 //add option for when the tree is empty! Cause then we really don't want to update anything, just add the key!
 int insert(fusion_node* node, __m512i key) {
 	if(node->tree.meta.size == 0) { //Should we assume that key_positions[0] is zero?
+		//cout << "SDLJFLKSDJF" << endl;
 		node->keys[0] = key;
+		//cout << "SDLJFLKSDJF" << endl;
 		node->tree.meta.size++;
 		return 1;
 	}
@@ -406,6 +421,12 @@ int query_branch(fusion_node* node, __m512i key) {
 	
 	int mask_pos = diff_bit_to_mask_pos(node, diff_bit_pos);
 	int diff_bit_val = get_bit_from_pos(key, diff_bit_pos);
-	int second_guess_pos = search_partial_pos_tree(node, first_basemask, abs(mask_pos), !diff_bit_val); //fix this!!
+	int second_guess_pos = search_partial_pos_tree2(node, first_basemask, abs(mask_pos), diff_bit_val); //This is definitely broken
 	return second_guess_pos;
+}
+
+void print_keys_sig_bits(fusion_node* node) {
+	for(int i=0; i<node->tree.meta.size; i++) {
+		print_binary_uint64_big_endian(get_key_from_sorted_pos(node, i)[7], true, 64, 8);
+	}
 }
