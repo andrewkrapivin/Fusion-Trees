@@ -5,6 +5,7 @@
 #include <cstdint>
 
 #define MAX_FUSION_SIZE 33 //Let's try to increase branching factor to 34
+#define INNER_FUSION_SIZE 16
 
 using namespace std; //maybe stop doing this. Ok definitely stop doing
 
