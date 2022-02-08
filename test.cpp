@@ -1,6 +1,7 @@
 #include "fusion_tree.h"
 #include "HelperFuncs.h"
 #include "FusionBTree.h"
+#include <boost/container/set.hpp>
 
 #include <random>
 #include <chrono>
@@ -255,10 +256,11 @@ int main(){
     }
     cout << "Num failed: " << numfailed << ", and one failed index (if any) is " << failedindex << endl;
     
-    constexpr long long bigtestsize = 50000000;
+    constexpr long long bigtestsize = 10000000;
     __m512i* big_randomlist = static_cast<__m512i*>(std::aligned_alloc(64, bigtestsize*64));
     uint64_t* small_randomlist = (uint64_t*)malloc(bigtestsize*sizeof(uint64_t));
     set<uint64_t> list_set;
+    boost::container::set<uint64_t> boost_set;
     //cout << "DFSDFDS" << endl;
     fusion_b_node* root = NULL;
     //set<__m512i, decltype(compare__m512i)*, allocator<__m512i>> randomlist_set;
@@ -289,6 +291,14 @@ int main(){
     end = chrono::high_resolution_clock::now();
     duration = chrono::duration_cast<chrono::microseconds>(end-start);
     cout << "Time to insert 64 bit ints to std::set: " << duration.count() << endl;
+
+    start = chrono::high_resolution_clock::now();
+    for(int i=0; i < bigtestsize; i++) {
+    	boost_set.insert(small_randomlist[i]);
+    }
+    end = chrono::high_resolution_clock::now();
+    duration = chrono::duration_cast<chrono::microseconds>(end-start);
+    cout << "Time to insert 64 bit ints to boost::container::set: " << duration.count() << endl;
 
     start = chrono::high_resolution_clock::now();
     sort(big_randomlist, big_randomlist+bigtestsize, compare__m512i);
