@@ -45,29 +45,29 @@ extern const fusion_node Empty_Fusion_Node;
 }*/
 
 //are tehse even neccesary? Am I being ridiculous with all those instructions? Maybe better to just get vec[pos] like that?	
-uint64_t get_uint64_from_m256(__m256i vec, int pos);
-uint64_t get_uint64_from_m512(__m512i vec, int pos);
+inline uint64_t get_uint64_from_m256(__m256i vec, int pos);
+inline uint64_t get_uint64_from_m512(__m512i vec, int pos);
 
 int first_diff_bit_pos(__m512i x, __m512i y); // seems works
 
-int get_bit_from_pos(__m256i key, int pos);
-int get_bit_from_pos(__m512i key, int pos);
+inline int get_bit_from_pos(__m256i key, int pos);
+inline int get_bit_from_pos(__m512i key, int pos);
 
 bool compare__m512i(__m512i a, __m512i b);
 
-__m256i setbit_each_epi16_in_range(__m256i src, int epi16pos, int low, int high, int bit = 1);
+inline __m256i setbit_each_epi16_in_range(__m256i src, int epi16pos, int low, int high, int bit = 1);
 
 bool node_full(fusion_node* node);
 
-uint16_t extract_bits(fusion_tree* tree, __m512i key); // seems works
+inline uint16_t extract_bits(fusion_tree* tree, __m512i key); // seems works
 
-__m256i compare_mask(fusion_node* node, uint16_t basemask);
+inline __m256i compare_mask(fusion_node* node, uint16_t basemask);
 
-int search_position(fusion_node* node, uint16_t basemask, const bool geq=true);
-int search_pos_arr(fusion_node* node, uint16_t basemask, const bool geq=true);
-int search_pos_tree(fusion_node* node, uint16_t basemask);
-int search_partial_pos_tree(fusion_node* node, uint16_t basemask, int cutoff_pos, bool largest);
-int search_partial_pos_tree2(fusion_node* node, uint16_t basemask, int cutoff_pos, bool largest);
+inline int search_position(fusion_node* node, uint16_t basemask, const bool geq=true);
+inline int search_pos_arr(fusion_node* node, uint16_t basemask, const bool geq=true);
+inline int search_pos_tree(fusion_node* node, uint16_t basemask);
+inline int search_partial_pos_tree(fusion_node* node, uint16_t basemask, int cutoff_pos, bool largest);
+inline int search_partial_pos_tree2(fusion_node* node, uint16_t basemask, int cutoff_pos, bool largest);
 
 uint8_t get_real_pos_from_sorted_pos(fusion_node* node, int index_in_sorted);
 __m512i get_key_from_sorted_pos(fusion_node* node, int index_in_sorted);
@@ -75,18 +75,18 @@ __m512i search_key(fusion_node* node, uint16_t basemask);
 
 //void update_mask(fusion_node* node, int bitpos);
 
-int diff_bit_to_mask_pos(fusion_node* node, unsigned int diffpos);
+inline int diff_bit_to_mask_pos(fusion_node* node, unsigned int diffpos);
 
-__m256i insert_mask(__m256i maskvec, uint16_t mask, int pos, bool right); //insert 16 bit mask into some position (specifying which mask)
-__m256i insert_partial_duplicate_mask(__m256i maskvec, int pos, bool right, int cuttoff_pos);
+inline __m256i insert_mask(__m256i maskvec, uint16_t mask, int pos, bool right); //insert 16 bit mask into some position (specifying which mask)
+inline __m256i insert_partial_duplicate_mask(__m256i maskvec, int pos, bool right, int cuttoff_pos);
 
-__m128i insert_sorted_pos_to_key_positions(__m128i key_positions, uint8_t sorted_pos, uint8_t real_pos, bool right);
+inline __m128i insert_sorted_pos_to_key_positions(__m128i key_positions, uint8_t sorted_pos, uint8_t real_pos, bool right);
 
-__m256i shift_mask(__m256i maskvec, int pos); //moves the bits to the left of pos one to the left to make room for a new bit there. pos is specifying bit in mask.
+inline __m256i shift_mask(__m256i maskvec, int pos); //moves the bits to the left of pos one to the left to make room for a new bit there. pos is specifying bit in mask.
 
-uint16_t shift_maskling(uint16_t mask, int pos);
+inline uint16_t shift_maskling(uint16_t mask, int pos);
 
-void add_position_to_extraction_mask(fusion_tree* tree, int pos_in_key); // seems works
+inline void add_position_to_extraction_mask(fusion_tree* tree, int pos_in_key); // seems works
 
 int insert(fusion_node* node, __m512i key);
 

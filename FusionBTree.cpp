@@ -140,7 +140,7 @@ __m512i* successor(fusion_b_node* root, __m512i key, bool foundkey /*=false*/, b
     //cout << "Branch is " << branch << ", and is it null: " << (root->children[branch < 0 ? 0 : branch] == NULL) << endl;
     if(branch < 0) { // exact key match found
         branch = ~branch;
-        if(root->children[branch] != NULL) {
+        if(root->children[branch+1] != NULL) { //This was root->children[branch] before, but that caused no problems for some reason? wtf? Oh, maybe cause its a B-tree that just never really happens. Yeah I think if there's just one child then that's enough
 	        return successor(root->children[branch+1], key, true, false);
 	    }
 	    else if(branch+1 < root->fusion_internal_tree.tree.meta.size) {
@@ -152,6 +152,38 @@ __m512i* successor(fusion_b_node* root, __m512i key, bool foundkey /*=false*/, b
     if(root->children[branch] == NULL || (ans = successor(root->children[branch], key)) == NULL){ //when didn't find the successor below, we now look if the successor is here
     	if(branch < root->fusion_internal_tree.tree.meta.size) {
     		return &root->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&root->fusion_internal_tree, branch)];
+    	}
+    	else return NULL;
+    }
+    return ans;
+}
+
+__m512i* predecessor(fusion_b_node* root, __m512i key, bool foundkey /*=false*/, bool needbig/*=false*/) { //returns null if there is no successor
+	if(root == NULL) return NULL;
+	if(foundkey) {
+		//cout << "Found key" << endl;
+		int branch = needbig ? root->fusion_internal_tree.tree.meta.size : 0;
+		__m512i* ans = predecessor(root->children[branch], key, true, needbig);
+		branch = needbig ? (root->fusion_internal_tree.tree.meta.size-1) : 0;
+		return ans == NULL ? &root->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&root->fusion_internal_tree, branch)] : ans;
+	}
+    int branch = query_branch(&root->fusion_internal_tree, key);
+    //print_keys_sig_bits(&root->fusion_internal_tree);
+    //cout << "Branch is " << branch << ", and is it null: " << (root->children[branch < 0 ? 0 : branch] == NULL) << endl;
+    if(branch < 0) { // exact key match found
+        branch = ~branch;
+        if(root->children[branch] != NULL) {
+	        return predecessor(root->children[branch], key, true, true);
+	    }
+	    else if(branch-1 >= 0) {
+	    	return &root->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&root->fusion_internal_tree, branch-1)];
+	   	}
+	    return NULL;
+    }
+    __m512i* ans;
+    if(root->children[branch] == NULL || (ans = predecessor(root->children[branch], key)) == NULL){ //when didn't find the successor below, we now look if the successor is here
+    	if(branch-1 >= 0) {
+    		return &root->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&root->fusion_internal_tree, branch-1)];
     	}
     	else return NULL;
     }
@@ -182,4 +214,13 @@ void printTree(fusion_b_node* root, int indent) {
 	root->visited = false;
 	for(int i = 0; i < indent; i++) cout << " ";
 	cout << "}" << endl;
+}
+
+int maxDepth(fusion_b_node* root) {
+    int ans = 0;
+	for(int i = 0; i < MAX_FUSION_SIZE+1; i++) {
+		if(root->children[i] != NULL)
+			ans = max(maxDepth(root->children[i])+1, ans);
+	}
+    return ans;
 }
