@@ -4,7 +4,7 @@
 #include <immintrin.h>
 #include <cstdint>
 
-#define MAX_FUSION_SIZE 16
+#define MAX_FUSION_SIZE 33 //Let's try to increase branching factor to 34
 
 using namespace std; //maybe stop doing this. Ok definitely stop doing
 
