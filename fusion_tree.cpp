@@ -23,10 +23,6 @@ inline uint64_t get_uint64_from_m512(__m512i vec, int pos) {
 
 int first_diff_bit_pos(__m512i x, __m512i y) {//there is def some confusion here with me about big endian/little endian so maybe need to change this a bit
 	__m512i z = _mm512_xor_si512(x, y);
-	/*for(int i = 0; i < 8; i++) {
-		cout << z[i] << " "; 
-	}
-	cout << endl;*/
 	__m512i w = _mm512_xor_si512(z, z);
 	__mmask16 nonzero_pieces = _mm512_cmp_epi32_mask(z, w, _MM_CMPINT_NE);
 	unsigned int nzr = _cvtmask16_u32(nonzero_pieces);
@@ -34,54 +30,25 @@ int first_diff_bit_pos(__m512i x, __m512i y) {//there is def some confusion here
 
 	//we are looking for the "leading" zeros, but we want to reverse to get the bit position cause all of this stuff makes absolutely no sense
 	unsigned int significant_one_index = 31 - _lzcnt_u32(nzr); // the naming of these functions is horrible! Because it counts trailizing zeros, but that's assuming big endian! But trailizing zeros should assume little endian, cause that's what the cpu sees! This causes even more confusion, as I'm thinking of implementing little endian I know also have to reverse my thinking here with the name
-	//cout << significant_one_index << endl;
 	__mmask16 significant_one_mask = _cvtu32_mask16(1 << significant_one_index);
-	//__m128i nzbytes = _mm512_extracti64x2_epi64(z, significant_one_index/2);
-	//uint64_t diffbyte = _mm_extract_epi64(nzbytes, significant_one_index%2);
 	w = _mm512_maskz_compress_epi32(significant_one_mask, z); //must be a better way to do this
 	__m128i lowerbytes = _mm512_extracti64x2_epi64(w, 0);
-	//unsigned int diffint = _mm512_cvtsi512_si32(w);
 	unsigned int diffint = _mm_extract_epi32(lowerbytes, 0);
 	return 32*significant_one_index + (31 - _lzcnt_u32(diffint));
 }
 
 inline int get_bit_from_pos(__m512i key, int pos) {//check if pos out of bounds?
-	/*int vecindex = pos/64;
-	__mmask8 vecindex_mask = _cvtu32_mask8(1 << vecindex);
-	__m512i movinglongtofront = _mm512_maskz_compress_epi64(vecindex_mask, key);
-	__m128i lowerbytes = _mm512_extracti64x2_epi64(movinglongtofront, 0);
-	uint64_t lowestlong = _mm_extract_epi64(lowerbytes, 0);
-	int longpos = pos%64;
-	return (lowestlong & (1 << longpos)) != 0;*/
-	/*int vecindex = pos/32;
-	__mmask16 vecindex_mask = _cvtu32_mask16(1 << vecindex);
-	__m512i movinglongtofront = _mm512_maskz_compress_epi32(vecindex_mask, key);
-	uint32_t lowestint = _mm512_cvtsi512_si32(movinglongtofront);
-	int longpos = pos%32;
-	return (lowestlong & (1 << longpos)) != 0;*/
 	uint64_t element_containing_bit = get_uint64_from_m512(key, pos/64);
-	//print_binary_uint64(element_containing_bit, true);
 	return (element_containing_bit & (1ull << (pos%64))) != 0;
 }
 
 inline int get_bit_from_pos(__m256i key, int pos) {//check if pos out of bounds?
-	/*int vecindex = pos/32;
-	__mmask8 vecindex_mask = _cvtu32_mask8(1 << vecindex);
-	__m256i movinglongtofront = _mm256_maskz_compress_epi32(vecindex_mask, key);
-	uint32_t lowestint = _mm256_cvtsi256_si32(movinglongtofront);
-	int longpos = pos%32;
-	return (lowestlong & (1 << longpos)) != 0;*/
 	uint64_t element_containing_bit = get_uint64_from_m256(key, pos/64);
 	return (element_containing_bit & (1ull << (pos%64))) != 0;
 }
 
 bool compare__m512i(__m512i a, __m512i b) { //remember for some reaon compare in sort is assumed to evaluate a < b
 	int diffbitpos = first_diff_bit_pos(a, b);
-	//cout << "Comparing two nums:" << endl;
-	//print_vec(a, true);
-	//print_vec(b, true);
-	//int x = get_bit_from_pos(b, diffbitpos);
-	//cout << "Diffbitpos: " << diffbitpos << ", and the actual bit: " << x << endl;
 	if(diffbitpos == -1) return false;
 	return get_bit_from_pos(b, diffbitpos);
 }
@@ -120,20 +87,18 @@ inline int search_position(fusion_node* node, uint16_t basemask, const bool geq 
 		geq_mask = _mm256_cmp_epi16_mask(node->tree.treebits, cmpmask, _MM_CMPINT_LT);
 	uint16_t converted = _cvtmask16_u32(geq_mask);
 	//we need to ignore comparisons with stuff where its beyond the size!!!!
-	//cout << "SFDSF " << ((1 << node->tree.meta.size) - 1) << endl;
 	return _mm_popcnt_u32(converted & ((1 << node->tree.meta.size) - 1));
 }
 
 //returns the position in the array of the largest element less than or equal to the basemask
 inline int search_pos_arr(fusion_node* node, uint16_t basemask, const bool geq /*= true*/) {
 	int pos = search_position(node, basemask, geq);
-	pos = max (pos-1, 0);
+	pos = std::max (pos-1, 0);
 	return pos;
 }
 //returns the position in the array of the element which would be reached by going down the blind trie using the basemask
 inline int search_pos_tree(fusion_node* node, uint16_t basemask) {
 	int pos_arr = search_pos_arr(node, basemask);
-	//cout << "Pos_arr is " << pos_arr << endl;
 	//basically we want to see whether the pos_arr or pos_arr+1 matches the basemask more closely, cause pos_arr and pos_arr+1 obviously difffer in one bit and we want to see which "path" or branch basemask takes at that differing bit
 	//clearly, if we've reached the rightmost node of the tree, we are done
 	if(pos_arr == node->tree.meta.size-1) return pos_arr;
@@ -151,14 +116,12 @@ inline int search_pos_tree(fusion_node* node, uint16_t basemask) {
 inline int search_partial_pos_tree(fusion_node* node, uint16_t basemask, int cutoff_pos, bool largest) {
 	uint16_t partial_basemask = basemask & (~((1 << cutoff_pos) - 1)); //remember to use ~ not ! for bitwise lol
 	partial_basemask = largest ? (partial_basemask + ((1 << cutoff_pos) - 1)) : partial_basemask;
-	//cout << "cutoff_pos is " << cutoff_pos << ", partial basemask is " << partial_basemask << " FDSFSD " << search_pos_arr(node, partial_basemask) <<  endl;
 	return search_pos_arr(node, partial_basemask);
 }
 
 inline int search_partial_pos_tree2(fusion_node* node, uint16_t basemask, int cutoff_pos, bool largest) {
 	uint16_t partial_basemask = basemask & (~((1 << cutoff_pos) - 1)); //remember to use ~ not ! for bitwise lol
 	partial_basemask = largest ? (partial_basemask + ((1 << cutoff_pos) - 1)) : partial_basemask;
-	//cout << "cutoff_pos is " << cutoff_pos << ", partial basemask is " << partial_basemask << " FDSFSD " << search_pos_arr(node, partial_basemask) <<  endl;
 	return search_position(node, partial_basemask, largest);
 }
 uint8_t get_real_pos_from_sorted_pos(fusion_node* node, int index_in_sorted) {
@@ -177,7 +140,7 @@ __m512i get_key_from_sorted_pos(fusion_node* node, int index_in_sorted) {
 
 __m512i search_key(fusion_node* node, uint16_t basemask) {
 	int pos = search_position(node, basemask);
-	pos = max (pos-1, 0);
+	pos = std::max (pos-1, 0);
 	return get_key_from_sorted_pos(node, pos);
 }
 
@@ -186,19 +149,15 @@ inline int diff_bit_to_mask_pos(fusion_node* node, unsigned int diffpos) {
 	unsigned int diffposbyte = diffpos/8;
 	bool test_specific_bits = byte_extract_ll & (1ll << diffposbyte);
 	int numbelow = _mm_popcnt_u64(byte_extract_ll & ((1ll << diffposbyte) - 1));
-	//cout << "diffposbyte: " << diffposbyte << ", numbelow " << numbelow << ", test specific bits " << test_specific_bits << ", byte_extract_ll " << byte_extract_ll << endl;
 	int maskpos = 0;
 	if(numbelow > 0) {
-		uint64_t tmp = min(numbelow, 8) * 8;
-		//cout << ((1ll << tmp) - 1ll) << ", " << (1ll << tmp) << ", " << tmp <<  endl; // um why is (1ll << 64) equal to 1 that makes absolutely no sense
+		uint64_t tmp = std::min(numbelow, 8) * 8;
 		uint64_t extract_mask = tmp == 64 ? (- 1ll) : ((1ll << tmp) - 1ll);
 		maskpos += _mm_popcnt_u64(node->tree.bitextract[0] & extract_mask);
 	}
 	if(numbelow > 8) {
-		uint64_t tmp = min(numbelow-8, 8) * 8;
-		//uint64_t extract_mask = tmp == 64 ? (- 1ll) : ((1ll << tmp) - 1ll);
+		uint64_t tmp = std::min(numbelow-8, 8) * 8;
 		maskpos += _mm_popcnt_u64(node->tree.bitextract[1] & ((1ll << tmp) - 1ll));
-		//maskpos += _mm_popcnt_u64(node->tree.bitextract[1] & extract_mask);
 	}
 	if(test_specific_bits) {
 		uint8_t tmp = *((uint8_t*)node->tree.bitextract + numbelow);
@@ -209,30 +168,19 @@ inline int diff_bit_to_mask_pos(fusion_node* node, unsigned int diffpos) {
 	return maskpos;
 }
 
-/*void update_mask(fusion_node* node, int bitpos) {
-	
-}*/
-
 //Right specifies where the value is inserted. Is it inserted to the right of the mask at the desired position or to the left?
 inline __m256i insert_mask(__m256i maskvec, uint16_t mask, int pos, bool right) {
-	//cout << "inserting mask: " << mask << " " << pos << " " << right << endl;
-	//print_vec(maskvec, true, 16);
 	if(right)
 		pos++;
 	uint16_t expand_mask_bits = (-1) ^ (1 << pos);
 	__mmask16 expand_mask = _cvtu32_mask16(expand_mask_bits);
 	maskvec = _mm256_maskz_expand_epi16(expand_mask, maskvec);
-	//cout << "maskvec" << endl;
-	//print_vec(maskvec, true, 16);
 	__m256i addmask = _mm256_maskz_set1_epi16(_knot_mask16(expand_mask), mask);
 	maskvec = _mm256_or_si256(addmask, maskvec);
-	//print_vec(maskvec, true, 16);
 	return maskvec;
 }
 
 inline __m256i insert_partial_duplicate_mask(__m256i maskvec, int pos, bool right, int cuttoff_pos) {
-	//cout << "inserting mask: " << mask << " " << pos << " " << right << endl;
-	//print_vec(maskvec, true, 16);
 	uint16_t expand_mask_bits = (-1) ^ (1 << pos);
 	__mmask16 expand_mask = _cvtu32_mask16(expand_mask_bits);
 	__m256i maskvec_exp = _mm256_maskz_expand_epi16(expand_mask, maskvec);
@@ -241,8 +189,6 @@ inline __m256i insert_partial_duplicate_mask(__m256i maskvec, int pos, bool righ
 	expand_mask = _knot_mask16(expand_mask);
 	if(right) expand_mask = _kshiftli_mask16(expand_mask, 1);
 	__m256i cuttoffmask = _mm256_maskz_set1_epi16(expand_mask, (1 << cuttoff_pos) - 1);
-	//cout << "maskvec" << endl;
-	//print_vec(maskvec, true, 16);
 	return _mm256_andnot_si256(cuttoffmask, ans);
 }
 
@@ -261,18 +207,10 @@ inline __m256i shift_mask(__m256i maskvec, int pos) {
 	uint16_t keep_mask = (1 << pos) - 1;
 	__mmask16 ones = 0xffff;
 	__m256i lowerbits_mask = _mm256_maskz_set1_epi16(ones, keep_mask);
-	//cout << "set1epi16 lower check: " << endl;
-	//print_vec(lowerbits_mask, true, 16);
 	__m256i lowerbits = _mm256_and_si256(maskvec, lowerbits_mask);
-	//cout << "lower bits check: " << endl;
-	//print_vec(lowerbits, true, 16);
 	__m256i higherbits = _mm256_andnot_si256(lowerbits_mask, maskvec);
-	//cout << "higher first check: " << endl;
-	//print_vec(higherbits, true, 16);
 	constexpr __m128i count = {1, 0};
 	higherbits = _mm256_maskz_sll_epi16(ones, higherbits, count);
-	//cout << "higher second check: " << endl;
-	//print_vec(higherbits, true, 16);
 	return _mm256_or_si256(lowerbits, higherbits);
 }
 
@@ -289,27 +227,19 @@ inline void add_position_to_extraction_mask(fusion_tree* tree, int pos_in_key) {
 	
 	uint64_t byte_extract_ll = _cvtmask64_u64(tree->byte_extract);
 	int numbelow = _mm_popcnt_u64(byte_extract_ll & ((1ll << byte_in_key) - 1));
-	//cout << "num below: " << numbelow << endl;
 	//if we changed byte extract, then we need to shift the bit extract over by one byte, which we can do with avx. Otherwise we just need to add the corresponding bit to bit extract
 	if(!_kortestz_mask64_u8(_kxor_mask64(new_byte_extract, tree->byte_extract), 0)) { //kortest gives one if the or is all zeros, but we want the two numbers to be different and thus not all zeros
-		//cout << "SHIFTING STUFF" << endl;
 		__m128i bitextract_to_shift = _mm_lddqu_si128((const __m128i*)&tree->bitextract[0]);
 		__mmask16 expand_mmask = _cvtu32_mask16 (~(1 << numbelow));
-		//cout << (~(1 << numbelow)) << " " << expand_mmask << " " << tree->bitextract[0] << endl;
 		_mm_storeu_si128((__m128i*)&tree->bitextract[0], _mm_maskz_expand_epi8(expand_mmask, bitextract_to_shift));
-		//cout << (~(1 << numbelow)) << " " << expand_mmask << " " << tree->bitextract[0] << endl;
 	}
 	tree->bitextract[numbelow/8] |= (1ull << (((numbelow%8) * 8) + pos_in_key%8));
-	//cout << tree->bitextract[0] << endl;
 	tree->byte_extract = new_byte_extract;
 }
 
-//add option for when the tree is empty! Cause then we really don't want to update anything, just add the key!
 int insert(fusion_node* node, __m512i key) {
 	if(node->tree.meta.size == 0) { //Should we assume that key_positions[0] is zero?
-		//cout << "SDLJFLKSDJF" << endl;
 		node->keys[0] = key;
-		//cout << "SDLJFLKSDJF" << endl;
 		node->tree.meta.size++;
 		return 1;
 	}
@@ -320,13 +250,10 @@ int insert(fusion_node* node, __m512i key) {
 	uint16_t first_basemask = extract_bits(&node->tree, key);
 	
 	int first_guess_pos = search_pos_tree(node, first_basemask);
-
-	//cout << "The extracted mask is " << first_basemask << ", and the guess position is " << first_guess_pos << endl;
 	
 	__m512i first_guess = get_key_from_sorted_pos(node, first_guess_pos);
 	
 	int diff_bit_pos = first_diff_bit_pos(first_guess, key);
-	//cout << "Diff bit pos is " << diff_bit_pos << endl;
 	
 	if (diff_bit_pos == -1) { //key is already in there
 		return -2;
@@ -334,7 +261,6 @@ int insert(fusion_node* node, __m512i key) {
 	
 	int mask_pos = diff_bit_to_mask_pos(node, diff_bit_pos);
 	int search_mask_pos = mask_pos;
-	//cout << "mask pos is " << mask_pos <<  endl;
 	
 	int diff_bit_val = get_bit_from_pos(key, diff_bit_pos);
 	
@@ -342,23 +268,15 @@ int insert(fusion_node* node, __m512i key) {
 	
 	if (mask_pos >= 0) { //then we do not already have this bit in the "fusion tree." We thus need to shift our masks and stuff to include this bit
 		node->tree.treebits = shift_mask(node->tree.treebits, mask_pos);
-		//cout << "Tree bits after shift" << endl;
-		//print_vec(node->tree.treebits, true, 16);
-		//cout << "Ignore mask before shift" << endl;
-		//print_vec(node->ignore_mask, true, 16);
 		node->ignore_mask = shift_mask(node->ignore_mask, mask_pos);
-		//cout << "Ignore mask after shift" << endl;
-		//print_vec(node->ignore_mask, true, 16);
 		//and we also shift the mask itself! And set the corresponding bit to the corresponding value
 		first_basemask = shift_maskling(first_basemask, mask_pos);
 		first_basemask |= diff_bit_val << mask_pos;
-		//cout << "modified first_basemask is " << first_basemask << endl;
 		
 		add_position_to_extraction_mask(&node->tree, diff_bit_pos);
 		
 		//increment search_mask_pos cause we want to search all the elements that are in the same subtree, but the bit defining the subtree has now increased, since we added a so far nonsense bit into the masks
 		search_mask_pos ++;
-		//cout << "Search mask pos: " << search_mask_pos << endl;
 		//if its an unseen bit then we need to query first_guess_pos again to find where the actual insert position should be. Obviously this is pretty bad code, so fix this.
 	}
 	else {
@@ -371,8 +289,6 @@ int insert(fusion_node* node, __m512i key) {
 	int low_pos = need_highest ? first_guess_pos : search_partial_pos_tree(node, first_basemask, mask_pos+1, false);
 	
 	int high_pos = need_highest ? search_partial_pos_tree(node, first_basemask, mask_pos+1, true) : first_guess_pos;
-	//cout << first_guess_pos << endl;
-	//cout << low_pos << " " << high_pos << " " << need_highest << " " << first_basemask << endl;
 	
 	//we need to set ignore mask to not ignore positions here
 	node->ignore_mask = setbit_each_epi16_in_range(node->ignore_mask, mask_pos, low_pos, high_pos);
@@ -386,11 +302,8 @@ int insert(fusion_node* node, __m512i key) {
 	//here I am inserting just don't ignore any bits, but I am not 100% sure that is correct. Is easier to do this than copying the guy we're next to, but that might be necessary. Def check this
 	//node->ignore_mask = insert_mask(node->ignore_mask, -1, first_guess_pos, diff_bit_val); //lol fixing insert_mask took way longer than it should have
 	//Pretty sure I came up with a situation where the above is wrong, but didn't work it out. Just being safe then:
-	//cout << "Duplicating mask " << first_guess_pos << " in ignore mask: " << endl;
-	//cout << "Before: "; print_vec(node->ignore_mask, true, 16);
 	//actually we want to duplicate it only up to the bit which matters, so the mask_pos. Here I am really not sure its important either, but well let's be safe
 	node->ignore_mask = insert_partial_duplicate_mask(node->ignore_mask, first_guess_pos, diff_bit_val, mask_pos);
-	//cout << "After: "; print_vec(node->ignore_mask, true, 16);
 
 	//cause the mask we inserted for our new element might have extra bits set that it should not have
 	node->tree.treebits = _mm256_and_si256(node->tree.treebits, node->ignore_mask);
@@ -412,8 +325,6 @@ int query_branch(fusion_node* node, __m512i key) {
 	__m512i first_guess = get_key_from_sorted_pos(node, first_guess_pos);
 	
 	int diff_bit_pos = first_diff_bit_pos(first_guess, key);
-
-	//cout << "Query guess: " << first_guess_pos << ", basemask: " << first_basemask << ", diff_bit_pos: " << diff_bit_pos << endl;
 	
 	if (diff_bit_pos == -1) { //key is already in there
 		return ~first_guess_pos; //idk if its negative then let's say you've found the exact key

@@ -4,8 +4,6 @@
 #include <immintrin.h>
 #include <cstdint>
 
-using namespace std; //seriously don't do this lol
-
 void print_binary_uint64(uint64_t x, bool newline=false, int divider=64);
 void print_binary_uint64_big_endian(uint64_t x, bool newline=false, int divider=64, int numbits=64);
 void print_hex_uint64(uint64_t x, bool newline=false, int divider=64);

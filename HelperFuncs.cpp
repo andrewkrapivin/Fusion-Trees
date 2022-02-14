@@ -1,6 +1,8 @@
 #include "HelperFuncs.h"
 #include <iostream>
 
+using namespace std;
+
 void print_binary_uint64(uint64_t x, bool newline /*=false*/, int divider /*=64*/) {
     for(int i=0; i < 64; i++) {
         if(i>0 && i%divider == 0) cout << ' ';

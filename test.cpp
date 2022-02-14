@@ -14,6 +14,8 @@
 #include <set>
 #include <cassert>
 
+using namespace std;
+
 uint64_t gen_random_uint64(mt19937& generator) {
     uint64_t A;
     std::uniform_int_distribution<uint64_t> temporary_distribution(0, ULLONG_MAX);

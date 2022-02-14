@@ -6,8 +6,6 @@
 
 #define MAX_FUSION_SIZE 16
 
-using namespace std; //maybe stop doing this. Ok definitely stop doing
-
 typedef struct {
 	uint8_t size;
 	uint8_t remaining[7];
