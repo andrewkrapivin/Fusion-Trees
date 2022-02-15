@@ -224,3 +224,25 @@ int maxDepth(fusion_b_node* root) {
 	}
     return ans;
 }
+
+size_t numNodes(fusion_b_node* root) {
+    size_t num = 1;
+	for(int i = 0; i < MAX_FUSION_SIZE+1; i++) {
+		if(root->children[i] != NULL)
+			num += numNodes(root->children[i]);
+	}
+    return num;
+}
+
+size_t totalDepth(fusion_b_node* root, size_t dep) {
+    size_t num = dep;
+	for(int i = 0; i < MAX_FUSION_SIZE+1; i++) {
+		if(root->children[i] != NULL)
+			num += totalDepth(root->children[i], dep+1);
+	}
+    return num;
+}
+
+size_t memUsage(fusion_b_node* root) { // in MB
+    return numNodes(root)*sizeof(fusion_b_node)/1000000;
+}

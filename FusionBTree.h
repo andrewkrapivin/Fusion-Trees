@@ -21,5 +21,8 @@ __m512i* successor(fusion_b_node* root, __m512i key, bool foundkey=false, bool n
 __m512i* predecessor(fusion_b_node* root, __m512i key, bool foundkey=false, bool needbig=false);
 void printTree(fusion_b_node* root, int indent=0);
 int maxDepth(fusion_b_node* root);
+size_t numNodes(fusion_b_node* root);
+size_t totalDepth(fusion_b_node* root, size_t dep=1);
+size_t memUsage(fusion_b_node* root);
 
 #endif

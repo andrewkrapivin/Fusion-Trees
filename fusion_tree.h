@@ -35,6 +35,7 @@ typedef struct {
 	__m256i ignore_mask; //idk what exactly to do with this
 	__m128i key_positions; //convert key position assuming sorted array to the real position in the keys array
 	//also maybe add a vector for the free_positions to support deletions easily
+	//__m128i uselessdata;
 	__m512i keys[MAX_FUSION_SIZE];
 } fusion_node;
 

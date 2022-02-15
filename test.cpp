@@ -256,7 +256,7 @@ int main(){
     }
     cout << "Num failed: " << numfailed << ", and one failed index (if any) is " << failedindex << endl;
     
-    constexpr long long bigtestsize = 10000000;
+    constexpr long long bigtestsize = 5000000;
     __m512i* big_randomlist = static_cast<__m512i*>(std::aligned_alloc(64, bigtestsize*64));
     uint64_t* small_randomlist = (uint64_t*)malloc(bigtestsize*sizeof(uint64_t));
     set<uint64_t> list_set;
@@ -340,7 +340,7 @@ int main(){
     			cout << "Wrong at " << i << endl;
     			print_binary_uint64_big_endian((*treesucc)[7], true, 64, 8);
     			break;
-		}
+		    }
     	}
     }
 
@@ -362,6 +362,9 @@ int main(){
     	}
     }
     //printTree(root);
+    cout << "Num Nodes: " << numNodes(root) << endl;
+    cout << "Total Depth: " << totalDepth(root) << endl;
+    cout << "Mem usage: " << memUsage(root) << endl;
     cout << "max depth: " << maxDepth(root) << endl;
     cout << "random seed is " << seed << endl;
 }
