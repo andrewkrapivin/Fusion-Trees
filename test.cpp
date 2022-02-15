@@ -15,6 +15,7 @@
 #include <cassert>
 
 using namespace std;
+using namespace FusionTree;
 
 uint64_t gen_random_uint64(mt19937& generator) {
     uint64_t A;
@@ -77,19 +78,6 @@ __m512i gen_random_vec_all_but_one_bit(mt19937& generator) {
     return _mm512_andnot_si512(gen_random_vec_one_bit(generator), _mm512_set1_epi8(255));
 }
 
-void print_node_info(fusion_node& test_node) {
-    cout << "Extraction mask:" << endl;
-    print_binary_uint64(test_node.tree.byte_extract, true);
-    print_binary_uint64(test_node.tree.bitextract[0], false, 8);
-    cout << " ";
-    print_binary_uint64(test_node.tree.bitextract[1], true, 8);
-    cout << "Tree and ignore bits:" << endl;
-    print_vec(test_node.tree.treebits, true, 16);
-    print_vec(test_node.ignore_mask, true, 16);
-    cout << "Sorted to real positions:" << endl;
-    print_vec(test_node.key_positions, true, 8);
-}
-
 int main(){
     unsigned seed = chrono::steady_clock::now().time_since_epoch().count();
     //we made this work! 2767760278, 3339913857, 3110249540(4 tests), 3998269307 (size 8!), 4151455078 (size 8), 2969908123 (this was just because I didn't generate unique random vectors), 1262589155 (fixed mask_pos for tmp>=8, but also some weird behavior?)
@@ -118,7 +106,7 @@ int main(){
     //print_vec(setbit_each_epi16_in_range(test, 2, 0, 7, 1), true, 16);
 
     //testing stuff
-    fusion_node test_node = {0};
+    FastInsertMiniTree test_node;
     /*add_position_to_extraction_mask(&test_node.tree, first_diff_bit_pos(B, X));
     add_position_to_extraction_mask(&test_node.tree, first_diff_bit_pos(A, B));
     print_binary_uint64(test_node.tree.byte_extract, true);
@@ -126,9 +114,9 @@ int main(){
     cout << extract_bits(&test_node.tree, A) << endl;
     cout << extract_bits(&test_node.tree, B) << endl;
     cout << extract_bits(&test_node.tree, X) << endl; //surprisingly enough seems right
-    cout << diff_bit_to_mask_pos(&test_node, 511) << endl;
-    cout << diff_bit_to_mask_pos(&test_node, 480) << endl;
-    cout << diff_bit_to_mask_pos(&test_node, 420) << endl;*/
+    cout << diff_bit_to_sketch_pos(&test_node, 511) << endl;
+    cout << diff_bit_to_sketch_pos(&test_node, 480) << endl;
+    cout << diff_bit_to_sketch_pos(&test_node, 420) << endl;*/
     //cout << insert(&test_node, X) << endl;
 
     //let's test extraction
@@ -209,7 +197,6 @@ int main(){
     int failedindex=-1;
     int testindex=-1;
     for(int i=0; i<numtests; i++) {
-        memcpy(&test_node, &Empty_Fusion_Node, sizeof(fusion_node));
         __m512i randomlist[sizetests];
         //vector<vector<uint64_t>> randomlistvec(16);
         vector<int> positions = generate_random_positions(generator, sizetests);
@@ -225,7 +212,7 @@ int main(){
         for(int j=0; j<sizetests; j++) {
             /*cout << "Inserting: ";
             print_vec(randomlist[j], true);*/
-            insert(&test_node, randomlist[j]);
+            test_node.insert(randomlist[j]);
             /*print_node_info(test_node);
             cout << "Inserted the " << j << "th thing" << endl;*/
         }
@@ -240,7 +227,7 @@ int main(){
             print_vec(randomlist[j], true);
         }*/
         for(int j=0; j<sizetests; j++){
-            int branch = query_branch(&test_node, randomlist[j]);
+            int branch = test_node.query_branch(randomlist[j]);
             if(branch >= 0) {
                 //cout << "Failed test " << i << ", and didn't even think the key was there" << endl;
                 numfailed++;
