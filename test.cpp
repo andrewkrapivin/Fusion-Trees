@@ -197,6 +197,7 @@ int main(){
     int failedindex=-1;
     int testindex=-1;
     for(int i=0; i<numtests; i++) {
+        test_node = FastInsertMiniTree();
         __m512i randomlist[sizetests];
         //vector<vector<uint64_t>> randomlistvec(16);
         vector<int> positions = generate_random_positions(generator, sizetests);
@@ -245,113 +246,113 @@ int main(){
     }
     cout << "Num failed: " << numfailed << ", and one failed index (if any) is " << failedindex << endl;
     
-    constexpr long long bigtestsize = 10000000;
-    __m512i* big_randomlist = static_cast<__m512i*>(std::aligned_alloc(64, bigtestsize*64));
-    uint64_t* small_randomlist = (uint64_t*)malloc(bigtestsize*sizeof(uint64_t));
-    set<uint64_t> list_set;
-    boost::container::set<uint64_t> boost_set;
-    //cout << "DFSDFDS" << endl;
-    fusion_b_node* root = NULL;
-    //set<__m512i, decltype(compare__m512i)*, allocator<__m512i>> randomlist_set;
-    for(int i=0; i < bigtestsize; i++) {
-    	//cout << "inserting " << i << "th vector" << endl;
-    	big_randomlist[i] = gen_random_vec(generator);
-        small_randomlist[i] = gen_random_uint64(generator);
-    	//randomlist_set.insert(big_randomlist[i]);
-    	//root = insert_full_tree(root, big_randomlist[i]);
-    	//print_binary_uint64_big_endian(big_randomlist[i][7], true, 64, 8);
-    	//print_binary_uint64_big_endian(big_randomlist[i][7], true);
-    	//print_vec(big_randomlist[i], true);
-    	//cout << ((int)root->fusion_internal_tree.tree.meta.size) << endl;
-    	//printTree(root);
-    }
-    auto start = chrono::high_resolution_clock::now();
-    for(int i=0; i < bigtestsize; i++) {
-    	root = insert_full_tree(root, big_randomlist[i]);
-    }
-    auto end = chrono::high_resolution_clock::now();
-    auto duration = chrono::duration_cast<chrono::microseconds>(end-start);
-    cout << "Time to insert: " << duration.count() << endl;
+    // constexpr long long bigtestsize = 10000000;
+    // __m512i* big_randomlist = static_cast<__m512i*>(std::aligned_alloc(64, bigtestsize*64));
+    // uint64_t* small_randomlist = (uint64_t*)malloc(bigtestsize*sizeof(uint64_t));
+    // set<uint64_t> list_set;
+    // boost::container::set<uint64_t> boost_set;
+    // //cout << "DFSDFDS" << endl;
+    // fusion_b_node* root = NULL;
+    // //set<__m512i, decltype(compare__m512i)*, allocator<__m512i>> randomlist_set;
+    // for(int i=0; i < bigtestsize; i++) {
+    // 	//cout << "inserting " << i << "th vector" << endl;
+    // 	big_randomlist[i] = gen_random_vec(generator);
+    //     small_randomlist[i] = gen_random_uint64(generator);
+    // 	//randomlist_set.insert(big_randomlist[i]);
+    // 	//root = insert_full_tree(root, big_randomlist[i]);
+    // 	//print_binary_uint64_big_endian(big_randomlist[i][7], true, 64, 8);
+    // 	//print_binary_uint64_big_endian(big_randomlist[i][7], true);
+    // 	//print_vec(big_randomlist[i], true);
+    // 	//cout << ((int)root->fusion_internal_tree.tree.meta.size) << endl;
+    // 	//printTree(root);
+    // }
+    // auto start = chrono::high_resolution_clock::now();
+    // for(int i=0; i < bigtestsize; i++) {
+    // 	root = insert_full_tree(root, big_randomlist[i]);
+    // }
+    // auto end = chrono::high_resolution_clock::now();
+    // auto duration = chrono::duration_cast<chrono::microseconds>(end-start);
+    // cout << "Time to insert: " << duration.count() << endl;
     
-    start = chrono::high_resolution_clock::now();
-    for(int i=0; i < bigtestsize; i++) {
-    	list_set.insert(small_randomlist[i]);
-    }
-    end = chrono::high_resolution_clock::now();
-    duration = chrono::duration_cast<chrono::microseconds>(end-start);
-    cout << "Time to insert 64 bit ints to std::set: " << duration.count() << endl;
+    // start = chrono::high_resolution_clock::now();
+    // for(int i=0; i < bigtestsize; i++) {
+    // 	list_set.insert(small_randomlist[i]);
+    // }
+    // end = chrono::high_resolution_clock::now();
+    // duration = chrono::duration_cast<chrono::microseconds>(end-start);
+    // cout << "Time to insert 64 bit ints to std::set: " << duration.count() << endl;
 
-    start = chrono::high_resolution_clock::now();
-    for(int i=0; i < bigtestsize; i++) {
-    	boost_set.insert(small_randomlist[i]);
-    }
-    end = chrono::high_resolution_clock::now();
-    duration = chrono::duration_cast<chrono::microseconds>(end-start);
-    cout << "Time to insert 64 bit ints to boost::container::set: " << duration.count() << endl;
+    // start = chrono::high_resolution_clock::now();
+    // for(int i=0; i < bigtestsize; i++) {
+    // 	boost_set.insert(small_randomlist[i]);
+    // }
+    // end = chrono::high_resolution_clock::now();
+    // duration = chrono::duration_cast<chrono::microseconds>(end-start);
+    // cout << "Time to insert 64 bit ints to boost::container::set: " << duration.count() << endl;
 
-    start = chrono::high_resolution_clock::now();
-    sort(big_randomlist, big_randomlist+bigtestsize, compare__m512i);
-    end = chrono::high_resolution_clock::now();
-    duration = chrono::duration_cast<chrono::microseconds>(end-start);
-    cout << "Time to sort with std::sort : " << duration.count() << endl;
+    // start = chrono::high_resolution_clock::now();
+    // sort(big_randomlist, big_randomlist+bigtestsize, compare__m512i);
+    // end = chrono::high_resolution_clock::now();
+    // duration = chrono::duration_cast<chrono::microseconds>(end-start);
+    // cout << "Time to sort with std::sort : " << duration.count() << endl;
     
-    /*start = chrono::high_resolution_clock::now();
-    for(int i=0; i < bigtestsize; i++) {
-    	root = insert_full_tree(root, big_randomlist[i]);
-    }
-    end = chrono::high_resolution_clock::now();
-    duration = chrono::duration_cast<chrono::microseconds>(end-start);
-    cout << "Time to insert: " << duration.count() << endl;*/
+    // /*start = chrono::high_resolution_clock::now();
+    // for(int i=0; i < bigtestsize; i++) {
+    // 	root = insert_full_tree(root, big_randomlist[i]);
+    // }
+    // end = chrono::high_resolution_clock::now();
+    // duration = chrono::duration_cast<chrono::microseconds>(end-start);
+    // cout << "Time to insert: " << duration.count() << endl;*/
     
-    __m512i prev = {0};
-    start = chrono::high_resolution_clock::now();
-    for(int i=0; i < bigtestsize; i++) {
-    	prev = *successor(root, prev);
-    	//assert(first_diff_bit_pos(prev, big_randomlist[i]) == -1);
-    }
-    end = chrono::high_resolution_clock::now();
-    duration = chrono::duration_cast<chrono::microseconds>(end-start);
-    cout << "Time to retrieve sorted list with fusion tree: " << duration.count() << endl;
-    //sort(big_randomlist, big_randomlist+bigtestsize, compare__m512i);
-    /*for(int i=0; i < bigtestsize; i++) {
-    	root = insert_full_tree(root, big_randomlist[i]);
-    }*/
-    for(int i=0; i < bigtestsize-1; i++) {
-    	//cout << "Searching ";
-    	//print_binary_uint64_big_endian(big_randomlist[i][7], true, 64, 8);
-    	__m512i* treesucc = successor(root, big_randomlist[i]);
-    	if(treesucc == NULL){
-    		cout << "treesuc is NULL" << endl;
-            break;
-    	}
-    	else {
-    		if(first_diff_bit_pos(*treesucc, big_randomlist[i+1]) != -1) {
-    			cout << "Wrong at " << i << endl;
-    			print_binary_uint64_big_endian((*treesucc)[7], true, 64, 8);
-    			break;
-		}
-    	}
-    }
+    // __m512i prev = {0};
+    // start = chrono::high_resolution_clock::now();
+    // for(int i=0; i < bigtestsize; i++) {
+    // 	prev = *successor(root, prev);
+    // 	//assert(first_diff_bit_pos(prev, big_randomlist[i]) == -1);
+    // }
+    // end = chrono::high_resolution_clock::now();
+    // duration = chrono::duration_cast<chrono::microseconds>(end-start);
+    // cout << "Time to retrieve sorted list with fusion tree: " << duration.count() << endl;
+    // //sort(big_randomlist, big_randomlist+bigtestsize, compare__m512i);
+    // /*for(int i=0; i < bigtestsize; i++) {
+    // 	root = insert_full_tree(root, big_randomlist[i]);
+    // }*/
+    // for(int i=0; i < bigtestsize-1; i++) {
+    // 	//cout << "Searching ";
+    // 	//print_binary_uint64_big_endian(big_randomlist[i][7], true, 64, 8);
+    // 	__m512i* treesucc = successor(root, big_randomlist[i]);
+    // 	if(treesucc == NULL){
+    // 		cout << "treesuc is NULL" << endl;
+    //         break;
+    // 	}
+    // 	else {
+    // 		if(first_diff_bit_pos(*treesucc, big_randomlist[i+1]) != -1) {
+    // 			cout << "Wrong at " << i << endl;
+    // 			print_binary_uint64_big_endian((*treesucc)[7], true, 64, 8);
+    // 			break;
+	// 	}
+    // 	}
+    // }
 
-    for(int i=bigtestsize-1; i > 0 ; i--) {
-    	//cout << "Searching ";
-    	//print_binary_uint64_big_endian(big_randomlist[i][7], true, 64, 8);
-    	__m512i* treepred = predecessor(root, big_randomlist[i]);
-    	if(treepred == NULL){
-    		cout << "treepred is NULL" << endl;
-            break;
-    	}
-    	else {
-    		if(first_diff_bit_pos(*treepred, big_randomlist[i-1]) != -1) {
-    			cout << "Wrong pred at " << i << endl;
-                print_binary_uint64_big_endian(big_randomlist[i-1][7], true, 64, 8);
-    			print_binary_uint64_big_endian((*treepred)[7], true, 64, 8);
-    			break;
-		}
-    	}
-    }
-    //printTree(root);
-    cout << "max depth: " << maxDepth(root) << endl;
-    cout << "random seed is " << seed << endl;
+    // for(int i=bigtestsize-1; i > 0 ; i--) {
+    // 	//cout << "Searching ";
+    // 	//print_binary_uint64_big_endian(big_randomlist[i][7], true, 64, 8);
+    // 	__m512i* treepred = predecessor(root, big_randomlist[i]);
+    // 	if(treepred == NULL){
+    // 		cout << "treepred is NULL" << endl;
+    //         break;
+    // 	}
+    // 	else {
+    // 		if(first_diff_bit_pos(*treepred, big_randomlist[i-1]) != -1) {
+    // 			cout << "Wrong pred at " << i << endl;
+    //             print_binary_uint64_big_endian(big_randomlist[i-1][7], true, 64, 8);
+    // 			print_binary_uint64_big_endian((*treepred)[7], true, 64, 8);
+    // 			break;
+	// 	}
+    // 	}
+    // }
+    // //printTree(root);
+    // cout << "max depth: " << maxDepth(root) << endl;
+    // cout << "random seed is " << seed << endl;
 }
 

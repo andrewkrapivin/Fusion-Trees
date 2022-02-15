@@ -161,6 +161,7 @@ namespace FusionTree {
 
 	//returns the position in the array of the element which would be reached by going down the blind trie using the sketch
 	inline int FastInsertMiniTree::search_pos_tree(uint16_t sketch) {
+		std::cout << "dfadf" << std::endl;
 		int pos_arr = search_pos_arr(sketch);
 		//basically we want to see whether the pos_arr or pos_arr+1 matches the sketch more closely, cause pos_arr and pos_arr+1 obviously difffer in one bit and we want to see which "path" or branch sketch takes at that differing bit
 		//clearly, if we've reached the rightmost node of the tree, we are done
