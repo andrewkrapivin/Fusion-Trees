@@ -10,7 +10,8 @@ using namespace std; //maybe stop doing this. Ok definitely stop doing
 
 typedef struct {
 	uint8_t size;
-	uint8_t remaining[7];
+	bool fast;
+	uint8_t remaining[6];
 } fusion_metadata;
 
 typedef struct {
@@ -94,6 +95,13 @@ int insert(fusion_node* node, __m512i key);
 int query_branch(fusion_node* node, __m512i key); //for now returns the bitwise complement if key is found
 
 int query_branch_fast(fusion_node* node, __m512i key);
+
+void make_fast(fusion_node* node, bool sort = true);
+
+int insert_fast(fusion_node* node, __m512i key);
+
+int query_branch_node(fusion_node* node, __m512i key);
+int insert_key_node(fusion_node* node, __m512i key);
 
 void print_keys_sig_bits(fusion_node* node);
 

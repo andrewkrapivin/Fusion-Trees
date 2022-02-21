@@ -14,7 +14,7 @@ fusion_b_node* new_empty_node(SimpleAlloc<fusion_b_node, 64>& allocator) {
 }
 
 fusion_b_node* search_key_full_tree(fusion_b_node* root, __m512i key) {
-    int branch = query_branch(&root->fusion_internal_tree, key);
+    int branch = query_branch_node(&root->fusion_internal_tree, key);
     //cout << "branching " << branch << endl;
     if(branch < 0 || root->children[branch] == NULL) { // either key exact match found or nowhere down to go
         branch = ~branch;
@@ -27,14 +27,14 @@ fusion_b_node* insert_full_tree(fusion_b_node* root, __m512i key, SimpleAlloc<fu
     if(root == NULL) {
         root = new_empty_node(allocator);
         //cout << "HELLO " << &root->fusion_internal_tree << endl;
-        insert(&root->fusion_internal_tree, key);
+        insert_key_node(&root->fusion_internal_tree, key);
         //cout << "HELLO" << endl;
         return root;
     }
 
     fusion_b_node* key_node = search_key_full_tree(root, key);
     if(!node_full(&key_node->fusion_internal_tree)) {
-        insert(&key_node->fusion_internal_tree, key);
+        insert_key_node(&key_node->fusion_internal_tree, key);
         return root;
     }
     __m512i pmedian = key;
@@ -44,7 +44,7 @@ fusion_b_node* insert_full_tree(fusion_b_node* root, __m512i key, SimpleAlloc<fu
     while(node_full(&key_node->fusion_internal_tree)) {
     	//print_keys_sig_bits(&key_node->fusion_internal_tree);
         fusion_node* key_fnode = &key_node->fusion_internal_tree;
-        int keypos = query_branch(key_fnode, pmedian);
+        int keypos = query_branch_node(key_fnode, pmedian);
         if(keypos < 0) //already in the tree. Should only be true on the first loop time. If something breaks and that isnt the case, this will be bad
             return root;
         __m512i newmedian;
@@ -58,7 +58,7 @@ fusion_b_node* insert_full_tree(fusion_b_node* root, __m512i key, SimpleAlloc<fu
             }*/
             __m512i curkey = i == keypos ? pmedian : get_key_from_sorted_pos(key_fnode, j++);// and this
             if (i < MAX_FUSION_SIZE/2) {
-                insert(&newlefthalf->fusion_internal_tree, curkey);
+                insert_key_node(&newlefthalf->fusion_internal_tree, curkey);
                 newlefthalf->children[i] = curchild;
                 if(curchild != NULL)
 	                curchild->parent = newlefthalf;
@@ -70,7 +70,7 @@ fusion_b_node* insert_full_tree(fusion_b_node* root, __m512i key, SimpleAlloc<fu
 	                curchild->parent = newlefthalf;
             }
             else {
-                insert(&newrighthalf->fusion_internal_tree, curkey);
+                insert_key_node(&newrighthalf->fusion_internal_tree, curkey);
                 newrighthalf->children[i-MAX_FUSION_SIZE/2-1] = curchild;
                 if(curchild != NULL)
                 	curchild->parent = newrighthalf;
@@ -88,6 +88,10 @@ fusion_b_node* insert_full_tree(fusion_b_node* root, __m512i key, SimpleAlloc<fu
         fusion_b_node* key_node_par = key_node->parent;
         //printTree(root);
         //cout << "Removing node " << key_node->id << endl;
+        if(key_node->fusion_internal_tree.tree.meta.fast) {
+            make_fast(&newlefthalf->fusion_internal_tree);
+            make_fast(&newrighthalf->fusion_internal_tree);
+        }
         allocator.free(key_node);
         key_node = key_node_par;
         if(key_node == NULL) { // went "above root," then we want to create new root
@@ -106,10 +110,11 @@ fusion_b_node* insert_full_tree(fusion_b_node* root, __m512i key, SimpleAlloc<fu
     }
     //printTree(root);
 	//cout << ((int)plefthalf->fusion_internal_tree.tree.meta.size) << " " << ((int)prighthalf->fusion_internal_tree.tree.meta.size) << endl;
-    insert(&key_node->fusion_internal_tree, pmedian);
+    insert_key_node(&key_node->fusion_internal_tree, pmedian);
+    if(!key_node->fusion_internal_tree.tree.meta.fast) make_fast(&key_node->fusion_internal_tree);
     //cout << "New things" << endl;
     //print_keys_sig_bits(&key_node->fusion_internal_tree);
-    int npos = ~query_branch(&key_node->fusion_internal_tree, pmedian);
+    int npos = ~query_branch_node(&key_node->fusion_internal_tree, pmedian);
     //shifting to make room for new children (& we want to ignore the actual child that will be replaced by the two children, which should be at the position of the new key)
     //The child we want to replace is exactly at the position of the added median, since it was to the "right" of the key smaller than the median and to the "left" of the key larger than the median, so its position is one more than the position of the key to the "left" of the median now, so the position of the median. Thus we want to ignore that key and move the things to the right of that by one
     //cout << "Npos is " << npos << endl;
@@ -135,7 +140,7 @@ __m512i* successor(fusion_b_node* root, __m512i key, bool foundkey /*=false*/, b
 		branch = needbig ? (root->fusion_internal_tree.tree.meta.size-1) : 0;
 		return ans == NULL ? &root->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&root->fusion_internal_tree, branch)] : ans;
 	}
-    int branch = query_branch(&root->fusion_internal_tree, key);
+    int branch = query_branch_node(&root->fusion_internal_tree, key);
     //print_keys_sig_bits(&root->fusion_internal_tree);
     //cout << "Branch is " << branch << ", and is it null: " << (root->children[branch < 0 ? 0 : branch] == NULL) << endl;
     if(branch < 0) { // exact key match found
@@ -167,7 +172,7 @@ __m512i* predecessor(fusion_b_node* root, __m512i key, bool foundkey /*=false*/,
 		branch = needbig ? (root->fusion_internal_tree.tree.meta.size-1) : 0;
 		return ans == NULL ? &root->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&root->fusion_internal_tree, branch)] : ans;
 	}
-    int branch = query_branch(&root->fusion_internal_tree, key);
+    int branch = query_branch_node(&root->fusion_internal_tree, key);
     //print_keys_sig_bits(&root->fusion_internal_tree);
     //cout << "Branch is " << branch << ", and is it null: " << (root->children[branch < 0 ? 0 : branch] == NULL) << endl;
     if(branch < 0) { // exact key match found

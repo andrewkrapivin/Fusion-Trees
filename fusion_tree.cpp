@@ -163,6 +163,7 @@ inline int search_partial_pos_tree2(fusion_node* node, uint16_t basemask, int cu
 	return search_position(node, partial_basemask, largest);
 }
 uint8_t get_real_pos_from_sorted_pos(fusion_node* node, int index_in_sorted) {
+	if(node->tree.meta.fast) return index_in_sorted;
 	__mmask16 pos_mask = _cvtu32_mask16((1 << index_in_sorted)); //we want the position of this element and the next position of course for our comparison
 	__m128i extracting_position = _mm_maskz_compress_epi8(pos_mask, node->key_positions);
 	uint8_t position = _mm_extract_epi8(extracting_position, 0);
@@ -491,6 +492,52 @@ int query_branch_fast(fusion_node* node, __m512i key) {
 	int diff_bit_val = get_bit_from_pos(key, diff_bit_pos);
 	int second_guess_pos = search_partial_pos_tree2_fast(node, first_basemask, abs(mask_pos), diff_bit_val);
 	return second_guess_pos;
+}
+
+void make_fast(fusion_node* node, bool sort /* = true */) {
+	if(sort)
+		std::sort(node->keys, node->keys+node->tree.meta.size, compare__m512i);
+	for(int i=0; i<node->tree.meta.size; i++) {
+		uint16_t sketch = extract_bits(&node->tree, node->keys[i]);
+		insert_mask(node->tree.treebits, sketch, i, false);
+	}
+	node->tree.meta.fast = true;
+}
+
+//Not actually fast lol. Just for inserting into the node that has fast search
+int insert_fast(fusion_node* node, __m512i key) {
+	if(node->tree.meta.size == MAX_FUSION_SIZE)
+		return -1;
+	int i = 0;
+	//could be binary search but this algo is O(n) anyways so doesn't matter
+	for(; compare__m512i(key, node->keys[i]); i++);
+	int diff_bit_pos = first_diff_bit_pos(node->keys[i], key);
+	if (diff_bit_pos == -1) {
+		return -2;
+	}
+	
+	int mask_pos = diff_bit_to_mask_pos(node, diff_bit_pos);
+	
+	if (mask_pos >= 0) { //then we do not already have this bit in the "fusion tree." We thus need to shift our masks and stuff to include this bit
+		add_position_to_extraction_mask(&node->tree, diff_bit_pos);
+	}
+
+	make_fast(node, false);
+	return 0;
+}
+
+int query_branch_node(fusion_node* node, __m512i key) {
+	if(node->tree.meta.fast) {
+		return query_branch_fast(node, key);
+	}
+	return query_branch(node, key);
+}
+
+int insert_key_node(fusion_node* node, __m512i key) {
+	if(node->tree.meta.fast) {
+		return insert_fast(node, key);
+	}
+	return insert(node, key);
 }
 
 void print_keys_sig_bits(fusion_node* node) {
