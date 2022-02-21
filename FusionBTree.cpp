@@ -5,9 +5,10 @@
 
 uint64_t IDCounter = 0;
 
-fusion_b_node* new_empty_node() {
+fusion_b_node* new_empty_node(/*SimpleAlloc<fusion_b_node, 64>& allocator*/) {
 	//cout << sizeof(fusion_b_node) << endl;
-    fusion_b_node* new_node = static_cast<fusion_b_node*>(std::aligned_alloc(64, sizeof(fusion_b_node)));
+    //fusion_b_node* new_node = allocator.alloc();
+    fusion_b_node* new_node =  static_cast<fusion_b_node*>(std::aligned_alloc(64, sizeof(fusion_b_node)));
     memset(new_node, 0, sizeof(fusion_b_node));
     new_node->id = IDCounter++;
     return new_node;
@@ -23,7 +24,7 @@ fusion_b_node* search_key_full_tree(fusion_b_node* root, __m512i key) {
     return search_key_full_tree(root->children[branch], key);
 }
 
-fusion_b_node* insert_full_tree(fusion_b_node* root, __m512i key) {
+fusion_b_node* insert_full_tree(fusion_b_node* root, __m512i key /*SimpleAlloc<fusion_b_node, 64>& allocator*/) {
     if(root == NULL) {
         root = new_empty_node();
         //cout << "HELLO " << &root->fusion_internal_tree << endl;
@@ -88,7 +89,7 @@ fusion_b_node* insert_full_tree(fusion_b_node* root, __m512i key) {
         fusion_b_node* key_node_par = key_node->parent;
         //printTree(root);
         //cout << "Removing node " << key_node->id << endl;
-        free(key_node);
+        std::free(key_node);
         key_node = key_node_par;
         if(key_node == NULL) { // went "above root," then we want to create new root
             root = new_empty_node();
