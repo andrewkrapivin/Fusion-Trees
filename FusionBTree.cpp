@@ -5,10 +5,9 @@
 
 uint64_t IDCounter = 0;
 
-fusion_b_node* new_empty_node(/*SimpleAlloc<fusion_b_node, 64>& allocator*/) {
+fusion_b_node* new_empty_node(SimpleAlloc<fusion_b_node, 64>& allocator) {
 	//cout << sizeof(fusion_b_node) << endl;
-    //fusion_b_node* new_node = allocator.alloc();
-    fusion_b_node* new_node =  static_cast<fusion_b_node*>(std::aligned_alloc(64, sizeof(fusion_b_node)));
+    fusion_b_node* new_node = allocator.alloc();
     memset(new_node, 0, sizeof(fusion_b_node));
     new_node->id = IDCounter++;
     return new_node;
@@ -24,9 +23,9 @@ fusion_b_node* search_key_full_tree(fusion_b_node* root, __m512i key) {
     return search_key_full_tree(root->children[branch], key);
 }
 
-fusion_b_node* insert_full_tree(fusion_b_node* root, __m512i key /*SimpleAlloc<fusion_b_node, 64>& allocator*/) {
+fusion_b_node* insert_full_tree(fusion_b_node* root, __m512i key, SimpleAlloc<fusion_b_node, 64>& allocator) {
     if(root == NULL) {
-        root = new_empty_node();
+        root = new_empty_node(allocator);
         //cout << "HELLO " << &root->fusion_internal_tree << endl;
         insert(&root->fusion_internal_tree, key);
         //cout << "HELLO" << endl;
@@ -49,8 +48,8 @@ fusion_b_node* insert_full_tree(fusion_b_node* root, __m512i key /*SimpleAlloc<f
         if(keypos < 0) //already in the tree. Should only be true on the first loop time. If something breaks and that isnt the case, this will be bad
             return root;
         __m512i newmedian;
-        fusion_b_node* newlefthalf = new_empty_node();
-        fusion_b_node* newrighthalf = new_empty_node();
+        fusion_b_node* newlefthalf = new_empty_node(allocator);
+        fusion_b_node* newrighthalf = new_empty_node(allocator);
         //just adding half the keys to the left size and half to the right
         for(int i=0, j=0; i < MAX_FUSION_SIZE+1; i++) {
             fusion_b_node* curchild = i == keypos ? plefthalf : (i == (keypos+1) ? prighthalf : key_node->children[j]); //p hacky, probably fix this
@@ -89,10 +88,10 @@ fusion_b_node* insert_full_tree(fusion_b_node* root, __m512i key /*SimpleAlloc<f
         fusion_b_node* key_node_par = key_node->parent;
         //printTree(root);
         //cout << "Removing node " << key_node->id << endl;
-        std::free(key_node);
+        allocator.free(key_node);
         key_node = key_node_par;
         if(key_node == NULL) { // went "above root," then we want to create new root
-            root = new_empty_node();
+            root = new_empty_node(allocator);
             key_node = root;
         }
         pmedian = newmedian;

@@ -259,13 +259,12 @@ int main(){
 
     cout << sizeof(fusion_node) << endl;
     
-    constexpr long long bigtestsize = 5000000;
+    constexpr long long bigtestsize = 50000000;
     __m512i* big_randomlist = static_cast<__m512i*>(std::aligned_alloc(64, bigtestsize*64));
     uint64_t* small_randomlist = (uint64_t*)malloc(bigtestsize*sizeof(uint64_t));
     set<uint64_t> list_set;
     boost::container::set<uint64_t> boost_set;
     //cout << "DFSDFDS" << endl;
-    //SimpleAlloc<fusion_b_node, 64> allocator(bigtestsize/10); //gotta be a bit more efficient here but whatever lol
     fusion_b_node* root = NULL;
     //set<__m512i, decltype(compare__m512i)*, allocator<__m512i>> randomlist_set;
     for(int i=0; i < bigtestsize; i++) {
@@ -281,8 +280,9 @@ int main(){
     	//printTree(root);
     }
     auto start = chrono::high_resolution_clock::now();
+    SimpleAlloc<fusion_b_node, 64> allocator(bigtestsize/8); //gotta be a bit more efficient here but whatever lol
     for(int i=0; i < bigtestsize; i++) {
-    	root = insert_full_tree(root, big_randomlist[i]);
+    	root = insert_full_tree(root, big_randomlist[i], allocator);
     }
     auto end = chrono::high_resolution_clock::now();
     auto duration = chrono::duration_cast<chrono::microseconds>(end-start);
