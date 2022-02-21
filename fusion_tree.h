@@ -46,6 +46,8 @@ extern const fusion_node Empty_Fusion_Node;
 	
 }*/
 
+fusion_node* new_empty_fusion_node();
+
 //are tehse even neccesary? Am I being ridiculous with all those instructions? Maybe better to just get vec[pos] like that?	
 inline uint64_t get_uint64_from_m256(__m256i vec, int pos);
 inline uint64_t get_uint64_from_m512(__m512i vec, int pos);
@@ -93,6 +95,8 @@ inline void add_position_to_extraction_mask(fusion_tree* tree, int pos_in_key); 
 int insert(fusion_node* node, __m512i key);
 
 int query_branch(fusion_node* node, __m512i key); //for now returns the bitwise complement if key is found
+
+inline int search_pos_tree_fast(fusion_node* node, uint16_t basemask);
 
 int query_branch_fast(fusion_node* node, __m512i key);
 

@@ -1,7 +1,3 @@
-#include "fusion_tree.h"
-#include "HelperFuncs.h"
-#include "FusionBTree.h"
-#include "SimpleAlloc.h"
 #include <boost/container/set.hpp>
 
 #include <random>
@@ -14,6 +10,12 @@
 #include <cstring>
 #include <set>
 #include <cassert>
+
+#include "SimpleAlloc.h"
+#include "fusion_tree.h"
+#include "HelperFuncs.h"
+#include "FusionBTree.h"
+#include "FusionQSort.h"
 
 uint64_t gen_random_uint64(mt19937& generator) {
     uint64_t A;
@@ -308,7 +310,13 @@ int main(){
     sort(big_randomlist, big_randomlist+bigtestsize, compare__m512i);
     end = chrono::high_resolution_clock::now();
     duration = chrono::duration_cast<chrono::microseconds>(end-start);
-    cout << "Time to sort with std::sort : " << duration.count() << endl;
+    cout << "Time to sort with std::sort: " << duration.count() << endl;
+
+    start = chrono::high_resolution_clock::now();
+    FusionQSort(big_randomlist, bigtestsize);
+    end = chrono::high_resolution_clock::now();
+    duration = chrono::duration_cast<chrono::microseconds>(end-start);
+    cout << "Time to sort with FusionQSort: " << duration.count() << endl;
     
     /*start = chrono::high_resolution_clock::now();
     for(int i=0; i < bigtestsize; i++) {

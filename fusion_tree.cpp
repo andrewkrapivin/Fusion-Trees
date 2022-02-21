@@ -3,8 +3,15 @@
 
 #include <algorithm>
 #include <iostream>
+#include <cstring>
 
 extern const fusion_node Empty_Fusion_Node = {0};
+
+fusion_node* new_empty_fusion_node() {
+	fusion_node* new_node = static_cast<fusion_node*>(std::aligned_alloc(64, sizeof(fusion_node)));
+    memset(new_node, 0, sizeof(fusion_node));
+    return new_node;
+}
 
 inline uint64_t get_uint64_from_m256(__m256i vec, int pos) {
 	__mmask8 pos_mask = _cvtu32_mask8(1 << pos);
