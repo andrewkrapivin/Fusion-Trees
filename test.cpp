@@ -255,6 +255,8 @@ int main(){
         }
     }
     cout << "Num failed: " << numfailed << ", and one failed index (if any) is " << failedindex << endl;
+
+    cout << sizeof(fusion_node) << endl;
     
     constexpr long long bigtestsize = 5000000;
     __m512i* big_randomlist = static_cast<__m512i*>(std::aligned_alloc(64, bigtestsize*64));
@@ -323,6 +325,15 @@ int main(){
     end = chrono::high_resolution_clock::now();
     duration = chrono::duration_cast<chrono::microseconds>(end-start);
     cout << "Time to retrieve sorted list with fusion tree: " << duration.count() << endl;
+
+    /*uint64_t prev = 0;
+    start = chrono::high_resolution_clock::now();
+    for(int i=0; i < bigtestsize; i++) {
+    	//prev = *list_set
+    }
+    end = chrono::high_resolution_clock::now();
+    duration = chrono::duration_cast<chrono::microseconds>(end-start);
+    cout << "Time to retrieve sorted list with fusion tree: " << duration.count() << endl;*/
     //sort(big_randomlist, big_randomlist+bigtestsize, compare__m512i);
     /*for(int i=0; i < bigtestsize; i++) {
     	root = insert_full_tree(root, big_randomlist[i]);

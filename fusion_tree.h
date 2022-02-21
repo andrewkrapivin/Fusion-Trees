@@ -31,12 +31,12 @@ extern const fusion_tree Empty_Fusion_Tree;
 
 //for now implementing this fast fusion tree as default, but maybe segment fusion tree into two pieces, cause they have different ways of searching, inserting
 typedef struct {
+	__m512i keys[MAX_FUSION_SIZE];
 	fusion_tree tree;
-	__m256i ignore_mask; //idk what exactly to do with this
-	__m128i key_positions; //convert key position assuming sorted array to the real position in the keys array
 	//also maybe add a vector for the free_positions to support deletions easily
 	//__m128i uselessdata;
-	__m512i keys[MAX_FUSION_SIZE];
+	__m256i ignore_mask; //idk what exactly to do with this
+	__m128i key_positions; //convert key position assuming sorted array to the real position in the keys array
 } fusion_node;
 
 extern const fusion_node Empty_Fusion_Node;
