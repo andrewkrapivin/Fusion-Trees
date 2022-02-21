@@ -114,10 +114,11 @@ inline __m256i compare_mask(fusion_node* node, uint16_t basemask) {
 inline int search_position(fusion_node* node, uint16_t basemask, const bool geq /*= true*/) {
 	__m256i cmpmask = compare_mask(node, basemask);
 	__mmask16 geq_mask;
-	if(geq)
+	/*if(geq)
 		geq_mask = _mm256_cmp_epi16_mask(node->tree.treebits, cmpmask, _MM_CMPINT_LE);
 	else
-		geq_mask = _mm256_cmp_epi16_mask(node->tree.treebits, cmpmask, _MM_CMPINT_LT);
+		geq_mask = _mm256_cmp_epi16_mask(node->tree.treebits, cmpmask, _MM_CMPINT_LT);*/
+	geq_mask = geq ? _mm256_cmp_epi16_mask(node->tree.treebits, cmpmask, _MM_CMPINT_LE): _mm256_cmp_epi16_mask(node->tree.treebits, cmpmask, _MM_CMPINT_LT);
 	uint16_t converted = _cvtmask16_u32(geq_mask);
 	//we need to ignore comparisons with stuff where its beyond the size!!!!
 	//cout << "SFDSF " << ((1 << node->tree.meta.size) - 1) << endl;
@@ -422,6 +423,73 @@ int query_branch(fusion_node* node, __m512i key) {
 	int mask_pos = diff_bit_to_mask_pos(node, diff_bit_pos);
 	int diff_bit_val = get_bit_from_pos(key, diff_bit_pos);
 	int second_guess_pos = search_partial_pos_tree2(node, first_basemask, abs(mask_pos), diff_bit_val);
+	return second_guess_pos;
+}
+
+inline int search_position_fast(fusion_node* node, uint16_t basemask, const bool geq /*= true*/) {
+	__m256i cmpmask = _mm256_set1_epi16(basemask);
+	__mmask16 geq_mask;
+	/*if(geq)
+		geq_mask = _mm256_cmp_epi16_mask(node->tree.treebits, cmpmask, _MM_CMPINT_LE);
+	else
+		geq_mask = _mm256_cmp_epi16_mask(node->tree.treebits, cmpmask, _MM_CMPINT_LT);*/
+	geq_mask = geq ? _mm256_cmp_epi16_mask(node->tree.treebits, cmpmask, _MM_CMPINT_LE): _mm256_cmp_epi16_mask(node->tree.treebits, cmpmask, _MM_CMPINT_LT);
+	uint16_t converted = _cvtmask16_u32(geq_mask);
+	//we need to ignore comparisons with stuff where its beyond the size!!!!
+	//cout << "SFDSF " << ((1 << node->tree.meta.size) - 1) << endl;
+	return _mm_popcnt_u32(converted & ((1 << node->tree.meta.size) - 1));
+}
+
+//returns the position in the array of the largest element less than or equal to the basemask
+inline int search_pos_arr_fast(fusion_node* node, uint16_t basemask, const bool geq = true) {
+	int pos = search_position_fast(node, basemask, geq);
+	pos = max (pos-1, 0);
+	return pos;
+}
+
+//returns the position in the array of the element which would be reached by going down the blind trie using the basemask
+inline int search_pos_tree_fast(fusion_node* node, uint16_t basemask) {
+	int pos_arr = search_pos_arr_fast(node, basemask);
+	//cout << "Pos_arr is " << pos_arr << endl;
+	//basically we want to see whether the pos_arr or pos_arr+1 matches the basemask more closely, cause pos_arr and pos_arr+1 obviously difffer in one bit and we want to see which "path" or branch basemask takes at that differing bit
+	//clearly, if we've reached the rightmost node of the tree, we are done
+	if(pos_arr == node->tree.meta.size-1) return pos_arr;
+	__mmask16 pos_mask = _cvtu32_mask16((1 << pos_arr) * 3); //we want the position of this element and the next position of course for our comparison
+	__m256i movinglongtofront = _mm256_maskz_compress_epi16(pos_mask, node->tree.treebits);
+	__m128i lowerbytes = _mm256_extracti64x2_epi64(movinglongtofront, 0);
+	uint32_t lowestint = _mm_extract_epi32(lowerbytes, 0);
+	//now we want the element which more closely matches, so the one with the smaller first differing bit
+	const uint32_t otherkeypos = 1 << 16;
+	lowestint ^= ((uint32_t) basemask) * (otherkeypos + 1); //xor each part to get first differing bit with each compressed key. We then just need to see which part is smaller!
+	return ((lowestint%otherkeypos) < (lowestint/otherkeypos)) ? pos_arr : (pos_arr+1);
+}
+
+inline int search_partial_pos_tree2_fast(fusion_node* node, uint16_t basemask, int cutoff_pos, bool largest) {
+	uint16_t partial_basemask = basemask & (~((1 << cutoff_pos) - 1)); //remember to use ~ not ! for bitwise lol
+	partial_basemask = largest ? (partial_basemask + ((1 << cutoff_pos) - 1)) : partial_basemask;
+	//cout << "cutoff_pos is " << cutoff_pos << ", partial basemask is " << partial_basemask << " FDSFSD " << search_pos_arr(node, partial_basemask) <<  endl;
+	return search_position_fast(node, partial_basemask, largest);
+}
+
+int query_branch_fast(fusion_node* node, __m512i key) {
+	uint16_t first_basemask = extract_bits(&node->tree, key);
+	
+	int first_guess_pos = search_pos_tree_fast(node, first_basemask);
+	
+	//__m512i first_guess = get_key_from_sorted_pos(node, first_guess_pos);
+	__m512i first_guess = node->keys[first_guess_pos];
+	
+	int diff_bit_pos = first_diff_bit_pos(first_guess, key);
+
+	//cout << "Query guess: " << first_guess_pos << ", basemask: " << first_basemask << ", diff_bit_pos: " << diff_bit_pos << endl;
+	
+	if (diff_bit_pos == -1) { //key is already in there
+		return ~first_guess_pos; //idk if its negative then let's say you've found the exact key
+	}
+	
+	int mask_pos = diff_bit_to_mask_pos(node, diff_bit_pos);
+	int diff_bit_val = get_bit_from_pos(key, diff_bit_pos);
+	int second_guess_pos = search_partial_pos_tree2_fast(node, first_basemask, abs(mask_pos), diff_bit_val);
 	return second_guess_pos;
 }
 

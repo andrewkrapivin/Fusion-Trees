@@ -259,7 +259,7 @@ int main(){
 
     cout << sizeof(fusion_node) << endl;
     
-    constexpr long long bigtestsize = 50000000;
+    constexpr long long bigtestsize = 5000000;
     __m512i* big_randomlist = static_cast<__m512i*>(std::aligned_alloc(64, bigtestsize*64));
     uint64_t* small_randomlist = (uint64_t*)malloc(bigtestsize*sizeof(uint64_t));
     set<uint64_t> list_set;
@@ -288,97 +288,116 @@ int main(){
     auto duration = chrono::duration_cast<chrono::microseconds>(end-start);
     cout << "Time to insert: " << duration.count() << endl;
     
-    // start = chrono::high_resolution_clock::now();
-    // for(int i=0; i < bigtestsize; i++) {
-    // 	list_set.insert(small_randomlist[i]);
-    // }
-    // end = chrono::high_resolution_clock::now();
-    // duration = chrono::duration_cast<chrono::microseconds>(end-start);
-    // cout << "Time to insert 64 bit ints to std::set: " << duration.count() << endl;
+    start = chrono::high_resolution_clock::now();
+    for(int i=0; i < bigtestsize; i++) {
+    	list_set.insert(small_randomlist[i]);
+    }
+    end = chrono::high_resolution_clock::now();
+    duration = chrono::duration_cast<chrono::microseconds>(end-start);
+    cout << "Time to insert 64 bit ints to std::set: " << duration.count() << endl;
 
-    // start = chrono::high_resolution_clock::now();
-    // for(int i=0; i < bigtestsize; i++) {
-    // 	boost_set.insert(small_randomlist[i]);
-    // }
-    // end = chrono::high_resolution_clock::now();
-    // duration = chrono::duration_cast<chrono::microseconds>(end-start);
-    // cout << "Time to insert 64 bit ints to boost::container::set: " << duration.count() << endl;
+    start = chrono::high_resolution_clock::now();
+    for(int i=0; i < bigtestsize; i++) {
+    	boost_set.insert(small_randomlist[i]);
+    }
+    end = chrono::high_resolution_clock::now();
+    duration = chrono::duration_cast<chrono::microseconds>(end-start);
+    cout << "Time to insert 64 bit ints to boost::container::set: " << duration.count() << endl;
 
-    // start = chrono::high_resolution_clock::now();
-    // sort(big_randomlist, big_randomlist+bigtestsize, compare__m512i);
-    // end = chrono::high_resolution_clock::now();
-    // duration = chrono::duration_cast<chrono::microseconds>(end-start);
-    // cout << "Time to sort with std::sort : " << duration.count() << endl;
+    start = chrono::high_resolution_clock::now();
+    sort(big_randomlist, big_randomlist+bigtestsize, compare__m512i);
+    end = chrono::high_resolution_clock::now();
+    duration = chrono::duration_cast<chrono::microseconds>(end-start);
+    cout << "Time to sort with std::sort : " << duration.count() << endl;
     
-    // /*start = chrono::high_resolution_clock::now();
-    // for(int i=0; i < bigtestsize; i++) {
-    // 	root = insert_full_tree(root, big_randomlist[i]);
-    // }
-    // end = chrono::high_resolution_clock::now();
-    // duration = chrono::duration_cast<chrono::microseconds>(end-start);
-    // cout << "Time to insert: " << duration.count() << endl;*/
+    /*start = chrono::high_resolution_clock::now();
+    for(int i=0; i < bigtestsize; i++) {
+    	root = insert_full_tree(root, big_randomlist[i]);
+    }
+    end = chrono::high_resolution_clock::now();
+    duration = chrono::duration_cast<chrono::microseconds>(end-start);
+    cout << "Time to insert: " << duration.count() << endl;*/
     
-    // __m512i prev = {0};
-    // start = chrono::high_resolution_clock::now();
-    // for(int i=0; i < bigtestsize; i++) {
-    // 	prev = *successor(root, prev);
-    // 	//assert(first_diff_bit_pos(prev, big_randomlist[i]) == -1);
-    // }
-    // end = chrono::high_resolution_clock::now();
-    // duration = chrono::duration_cast<chrono::microseconds>(end-start);
-    // cout << "Time to retrieve sorted list with fusion tree: " << duration.count() << endl;
+    __m512i prev = {0};
+    start = chrono::high_resolution_clock::now();
+    for(int i=0; i < bigtestsize; i++) {
+    	prev = *successor(root, prev);
+    	//assert(first_diff_bit_pos(prev, big_randomlist[i]) == -1);
+    }
+    end = chrono::high_resolution_clock::now();
+    duration = chrono::duration_cast<chrono::microseconds>(end-start);
+    cout << "Time to retrieve sorted list with fusion tree: " << duration.count() << endl;
 
-    // /*uint64_t prev = 0;
-    // start = chrono::high_resolution_clock::now();
-    // for(int i=0; i < bigtestsize; i++) {
-    // 	//prev = *list_set
-    // }
-    // end = chrono::high_resolution_clock::now();
-    // duration = chrono::duration_cast<chrono::microseconds>(end-start);
-    // cout << "Time to retrieve sorted list with fusion tree: " << duration.count() << endl;*/
-    // //sort(big_randomlist, big_randomlist+bigtestsize, compare__m512i);
-    // /*for(int i=0; i < bigtestsize; i++) {
-    // 	root = insert_full_tree(root, big_randomlist[i]);
-    // }*/
-    // for(int i=0; i < bigtestsize-1; i++) {
-    // 	//cout << "Searching ";
-    // 	//print_binary_uint64_big_endian(big_randomlist[i][7], true, 64, 8);
-    // 	__m512i* treesucc = successor(root, big_randomlist[i]);
-    // 	if(treesucc == NULL){
-    // 		cout << "treesuc is NULL" << endl;
-    //         break;
-    // 	}
-    // 	else {
-    // 		if(first_diff_bit_pos(*treesucc, big_randomlist[i+1]) != -1) {
-    // 			cout << "Wrong at " << i << endl;
-    // 			print_binary_uint64_big_endian((*treesucc)[7], true, 64, 8);
-    // 			break;
-	// 	    }
-    // 	}
-    // }
+    long long count = 0;
+    start = chrono::high_resolution_clock::now();
+    for(int i=0; i < bigtestsize; i++) {
+        count += query_branch(&root->fusion_internal_tree, big_randomlist[i]);
+    	//assert(first_diff_bit_pos(prev, big_randomlist[i]) == -1);
+    }
+    end = chrono::high_resolution_clock::now();
+    duration = chrono::duration_cast<chrono::microseconds>(end-start);
+    cout << "Time to query slow: " << duration.count() << endl;
 
-    // for(int i=bigtestsize-1; i > 0 ; i--) {
-    // 	//cout << "Searching ";
-    // 	//print_binary_uint64_big_endian(big_randomlist[i][7], true, 64, 8);
-    // 	__m512i* treepred = predecessor(root, big_randomlist[i]);
-    // 	if(treepred == NULL){
-    // 		cout << "treepred is NULL" << endl;
-    //         break;
-    // 	}
-    // 	else {
-    // 		if(first_diff_bit_pos(*treepred, big_randomlist[i-1]) != -1) {
-    // 			cout << "Wrong pred at " << i << endl;
-    //             print_binary_uint64_big_endian(big_randomlist[i-1][7], true, 64, 8);
-    // 			print_binary_uint64_big_endian((*treepred)[7], true, 64, 8);
-    // 			break;
-	// 	}
-    // 	}
-    // }
-    // //printTree(root);
-    // cout << "Num Nodes: " << numNodes(root) << endl;
-    // cout << "Total Depth: " << totalDepth(root) << endl;
-    // cout << "Mem usage: " << memUsage(root) << endl;
-    // cout << "max depth: " << maxDepth(root) << endl;
-    // cout << "random seed is " << seed << endl;
+    start = chrono::high_resolution_clock::now();
+    for(int i=0; i < bigtestsize; i++) {
+        count += query_branch_fast(&root->fusion_internal_tree, big_randomlist[i]);
+    	//assert(first_diff_bit_pos(prev, big_randomlist[i]) == -1);
+    }
+    end = chrono::high_resolution_clock::now();
+    duration = chrono::duration_cast<chrono::microseconds>(end-start);
+    cout << "Time to query fast: " << duration.count() << " FDFSDF " << count << endl;
+
+    /*uint64_t prev = 0;
+    start = chrono::high_resolution_clock::now();
+    for(int i=0; i < bigtestsize; i++) {
+    	//prev = *list_set
+    }
+    end = chrono::high_resolution_clock::now();
+    duration = chrono::duration_cast<chrono::microseconds>(end-start);
+    cout << "Time to retrieve sorted list with fusion tree: " << duration.count() << endl;*/
+    //sort(big_randomlist, big_randomlist+bigtestsize, compare__m512i);
+    /*for(int i=0; i < bigtestsize; i++) {
+    	root = insert_full_tree(root, big_randomlist[i]);
+    }*/
+    for(int i=0; i < bigtestsize-1; i++) {
+    	//cout << "Searching ";
+    	//print_binary_uint64_big_endian(big_randomlist[i][7], true, 64, 8);
+    	__m512i* treesucc = successor(root, big_randomlist[i]);
+    	if(treesucc == NULL){
+    		cout << "treesuc is NULL" << endl;
+            break;
+    	}
+    	else {
+    		if(first_diff_bit_pos(*treesucc, big_randomlist[i+1]) != -1) {
+    			cout << "Wrong at " << i << endl;
+    			print_binary_uint64_big_endian((*treesucc)[7], true, 64, 8);
+    			break;
+		    }
+    	}
+    }
+
+    for(int i=bigtestsize-1; i > 0 ; i--) {
+    	//cout << "Searching ";
+    	//print_binary_uint64_big_endian(big_randomlist[i][7], true, 64, 8);
+    	__m512i* treepred = predecessor(root, big_randomlist[i]);
+    	if(treepred == NULL){
+    		cout << "treepred is NULL" << endl;
+            break;
+    	}
+    	else {
+    		if(first_diff_bit_pos(*treepred, big_randomlist[i-1]) != -1) {
+    			cout << "Wrong pred at " << i << endl;
+                print_binary_uint64_big_endian(big_randomlist[i-1][7], true, 64, 8);
+    			print_binary_uint64_big_endian((*treepred)[7], true, 64, 8);
+    			break;
+		}
+    	}
+    }
+    //printTree(root);
+    cout << "Num Nodes: " << numNodes(root) << endl;
+    cout << "Total Depth: " << totalDepth(root) << endl;
+    cout << "Mem usage: " << memUsage(root) << endl;
+    cout << "max depth: " << maxDepth(root) << endl;
+    cout << "random seed is " << seed << endl;
 }
 

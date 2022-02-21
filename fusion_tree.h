@@ -93,6 +93,8 @@ int insert(fusion_node* node, __m512i key);
 
 int query_branch(fusion_node* node, __m512i key); //for now returns the bitwise complement if key is found
 
+int query_branch_fast(fusion_node* node, __m512i key);
+
 void print_keys_sig_bits(fusion_node* node);
 
 #endif 
