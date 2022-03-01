@@ -93,7 +93,7 @@ void print_node_info(fusion_node& test_node) {
 
 int main(){
     unsigned seed = chrono::steady_clock::now().time_since_epoch().count();
-    //we made this work! 2767760278, 3339913857, 3110249540(4 tests), 3998269307 (size 8!), 4151455078 (size 8), 2969908123 (this was just because I didn't generate unique random vectors), 1262589155 (fixed mask_pos for tmp>=8, but also some weird behavior?)
+    //we made this work! 2767760278, 3339913857, 3110249540(4 tests), 3998269307 (size 8!), 4151455078 (size 8), 2969908123 (this was just because I didn't generate unique random vectors), 1262589155 (fixed mask_pos for tmp>=8, but also some weird behavior?), 2126216167 (really dumb lol)
     mt19937 generator (seed);
 
 	__m512i A = {0, 1, 0, 0, 0, 0, 0, 3}; //we treat the number as little endian, cause otherwise it is inconsistent.
@@ -204,29 +204,31 @@ int main(){
     cout << _tzcnt_u32(1) << endl;*/
 
     //The Real Test
-    int numtests=10;
-    constexpr int sizetests=1;
+    int numtests=1;
+    constexpr int sizetests=3;
     int numfailed=0;
     int failedindex=-1;
     int testindex=-1;
     for(int i=0; i<numtests; i++) {
         memcpy(&test_node, &Empty_Fusion_Node, sizeof(fusion_node));
+        
         __m512i randomlist[sizetests];
         //vector<vector<uint64_t>> randomlistvec(16);
         vector<int> positions = generate_random_positions(generator, sizetests);
         for(int j=0; j<sizetests; j++) {
             uniform_int_distribution<uint64_t> temporary_distribution(0, 1);
-            if(temporary_distribution(generator))
-                randomlist[j] = gen_vec_one_bit(positions[j]);
-            else 
+            //if(temporary_distribution(generator))
+                //randomlist[j] = gen_vec_one_bit(positions[j]);
+            //else 
                 randomlist[j] = gen_random_vec(generator);
         }
         if(testindex!=-1 && testindex!=i) continue;
-
+        make_fast(&test_node);
         for(int j=0; j<sizetests; j++) {
             /*cout << "Inserting: ";
             print_vec(randomlist[j], true);*/
-            insert(&test_node, randomlist[j]);
+            insert_key_node(&test_node, randomlist[j]);
+            make_fast(&test_node);
             /*print_node_info(test_node);
             cout << "Inserted the " << j << "th thing" << endl;*/
         }
@@ -241,7 +243,7 @@ int main(){
             print_vec(randomlist[j], true);
         }*/
         for(int j=0; j<sizetests; j++){
-            int branch = query_branch(&test_node, randomlist[j]);
+            int branch = query_branch_node(&test_node, randomlist[j]);
             if(branch >= 0) {
                 //cout << "Failed test " << i << ", and didn't even think the key was there" << endl;
                 numfailed++;
@@ -256,12 +258,31 @@ int main(){
                 break;
             }
         }
+        for(int j=0; j<sizetests; j++){
+            randomlist[j][0]++;
+            int branch = query_branch_node(&test_node, randomlist[j]);
+            if(branch < 0) {
+                //cout << "Failed test " << i << ", and didn't even think the key was there" << endl;
+                numfailed++;
+                failedindex=i;
+                break;
+            }
+            if(branch != j+1) {
+                //cout << "Failed test " << i << " at node " << j << endl;
+                numfailed++;
+                failedindex=i;
+                break;
+            }
+        }
     }
-    cout << "Num failed: " << numfailed << ", and one failed index (if any) is " << failedindex << endl;
+    //print_keys_sig_bits(&test_node);
+    //cout << "Num failed: " << numfailed << ", and one failed index (if any) is " << failedindex << endl;
 
     cout << sizeof(fusion_node) << endl;
+
+    //return 0;
     
-    constexpr long long bigtestsize = 5000000;
+    constexpr long long bigtestsize = 10000000;
     __m512i* big_randomlist = static_cast<__m512i*>(std::aligned_alloc(64, bigtestsize*64));
     uint64_t* small_randomlist = (uint64_t*)malloc(bigtestsize*sizeof(uint64_t));
     set<uint64_t> list_set;
@@ -284,8 +305,12 @@ int main(){
     auto start = chrono::high_resolution_clock::now();
     SimpleAlloc<fusion_b_node, 64> allocator(bigtestsize/8); //gotta be a bit more efficient here but whatever lol
     for(int i=0; i < bigtestsize; i++) {
+        // cout << "i is: " << i << endl;
+        //if(root!= NULL) printTree(root);
     	root = insert_full_tree(root, big_randomlist[i], allocator);
+        //printTree(root);
     }
+    cout << "random seed is " << seed << endl;
     auto end = chrono::high_resolution_clock::now();
     auto duration = chrono::duration_cast<chrono::microseconds>(end-start);
     cout << "Time to insert: " << duration.count() << endl;
@@ -305,6 +330,16 @@ int main(){
     end = chrono::high_resolution_clock::now();
     duration = chrono::duration_cast<chrono::microseconds>(end-start);
     cout << "Time to insert 64 bit ints to boost::container::set: " << duration.count() << endl;
+
+    __m512i prev2 = {0};
+    start = chrono::high_resolution_clock::now();
+    for(int i=0; i < bigtestsize; i++) {
+    	prev2 = *successor(root, big_randomlist[i]);
+    	//assert(first_diff_bit_pos(prev, big_randomlist[i]) == -1);
+    }
+    end = chrono::high_resolution_clock::now();
+    duration = chrono::duration_cast<chrono::microseconds>(end-start);
+    cout << "Time to query nodes in random order: " << duration.count() << endl;
 
     start = chrono::high_resolution_clock::now();
     sort(big_randomlist, big_randomlist+bigtestsize, compare__m512i);
@@ -330,7 +365,7 @@ int main(){
     start = chrono::high_resolution_clock::now();
     for(int i=0; i < bigtestsize; i++) {
     	prev = *successor(root, prev);
-    	//assert(first_diff_bit_pos(prev, big_randomlist[i]) == -1);
+    	assert(first_diff_bit_pos(prev, big_randomlist[i]) == -1);
     }
     end = chrono::high_resolution_clock::now();
     duration = chrono::duration_cast<chrono::microseconds>(end-start);
