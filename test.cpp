@@ -282,7 +282,7 @@ int main(){
 
     //return 0;
     
-    constexpr long long bigtestsize = 10000000;
+    constexpr long long bigtestsize = 1000000;
     __m512i* big_randomlist = static_cast<__m512i*>(std::aligned_alloc(64, bigtestsize*64));
     uint64_t* small_randomlist = (uint64_t*)malloc(bigtestsize*sizeof(uint64_t));
     set<uint64_t> list_set;
@@ -331,12 +331,15 @@ int main(){
     duration = chrono::duration_cast<chrono::microseconds>(end-start);
     cout << "Time to insert 64 bit ints to boost::container::set: " << duration.count() << endl;
 
-    __m512i prev2 = {0};
+    __m512i* prev2;
+    uint64_t cNull = 0;
     start = chrono::high_resolution_clock::now();
     for(int i=0; i < bigtestsize; i++) {
-    	prev2 = *successor(root, big_randomlist[i]);
-    	//assert(first_diff_bit_pos(prev, big_randomlist[i]) == -1);
+    	prev2 = successor(root, big_randomlist[i]);
+        if(prev2 == NULL) cNull++;
+    	//assert(first_diff_bit_pos(prev2, big_randomlist[i]) == -1);
     }
+    assert(cNull == 1);
     end = chrono::high_resolution_clock::now();
     duration = chrono::duration_cast<chrono::microseconds>(end-start);
     cout << "Time to query nodes in random order: " << duration.count() << endl;
@@ -347,11 +350,33 @@ int main(){
     duration = chrono::duration_cast<chrono::microseconds>(end-start);
     cout << "Time to sort with std::sort: " << duration.count() << endl;
 
+    // for(size_t i = 0; i < bigtestsize; i++) {
+    //     print_binary_uint64_big_endian(big_randomlist[i][7], true, 64, 16);
+    // }
+
+    for(size_t i = 0; i < bigtestsize; i++) {
+        std::uniform_int_distribution<uint64_t> temporary_distribution(0, bigtestsize-1);
+        size_t j = temporary_distribution(generator);
+        swap(big_randomlist[i], big_randomlist[j]);
+    }
+
     start = chrono::high_resolution_clock::now();
     FusionQSort(big_randomlist, bigtestsize);
     end = chrono::high_resolution_clock::now();
     duration = chrono::duration_cast<chrono::microseconds>(end-start);
     cout << "Time to sort with FusionQSort: " << duration.count() << endl;
+
+    for(size_t i = 0; i < bigtestsize-1; i++) {
+        assert(first_diff_bit_pos(big_randomlist[i+1], big_randomlist[i]) != -1);
+        if(!compare__m512i(big_randomlist[i], big_randomlist[i+1])) {
+            cout << "Failed at " << i << endl;
+            exit(1);
+        }
+    }
+
+    // for(size_t i = 0; i < bigtestsize; i++) {
+    //     print_binary_uint64_big_endian(big_randomlist[i][7], true, 64, 16);
+    // }
     
     /*start = chrono::high_resolution_clock::now();
     for(int i=0; i < bigtestsize; i++) {

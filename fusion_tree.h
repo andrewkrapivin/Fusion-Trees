@@ -52,9 +52,9 @@ fusion_node* new_empty_fusion_node();
 inline uint64_t get_uint64_from_m256(__m256i vec, int pos);
 inline uint64_t get_uint64_from_m512(__m512i vec, int pos);
 
-#define first_diff_bit_pos(x, y) my_first_diff_bit_pos(x, y, __FILE__, __LINE__)
+// #define first_diff_bit_pos(x, y) my_first_diff_bit_pos(x, y, __FILE__, __LINE__)
 //int first_diff_bit_pos(__m512i x, __m512i y); // seems works
-int my_first_diff_bit_pos(__m512i x, __m512i y, const char* file, int line);
+int first_diff_bit_pos(__m512i x, __m512i y);
 
 inline int get_bit_from_pos(__m256i key, int pos);
 inline int get_bit_from_pos(__m512i key, int pos);
@@ -106,9 +106,9 @@ void make_fast(fusion_node* node, bool sort = true);
 
 int insert_fast(fusion_node* node, __m512i key);
 
-#define query_branch_node(x, y) my_query_branch_node(x, y, __FILE__, __LINE__)
+// #define query_branch_node(x, y) my_query_branch_node(x, y, __FILE__, __LINE__)
 //int query_branch_node(fusion_node* node, __m512i key);
-int my_query_branch_node(fusion_node* node, __m512i key, const char* file, int line);
+int query_branch_node(fusion_node* node, __m512i key);
 int insert_key_node(fusion_node* node, __m512i key);
 
 void print_keys_sig_bits(fusion_node* node);
