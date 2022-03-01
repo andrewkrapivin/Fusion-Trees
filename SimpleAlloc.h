@@ -2,6 +2,17 @@
 #define SIMPLE_ALLOC_H_INCLUDED
 
 #include <cstdlib>
+#include <iostream>
+#include "fusion_tree.h"
+
+// typedef struct fusion_bf_node{
+// 	fusion_node fusion_internal_tree;
+// 	fusion_bf_node* children[MAX_FUSION_SIZE+1];
+//     fusion_bf_node* parent;
+//     //temporary debug vals
+//     bool visited;
+//     uint64_t id;
+// } fusion_bf_node;
 
 //Simply allocates a whole array of same sized things with an allignment;
 
@@ -45,6 +56,7 @@ class SimpleAlloc {
     template <class T, size_t alignment> 
     void SimpleAlloc<T, alignment>::free(T* ptr) {
         free_elements[numFreeElements++] = ptr;
+        // cout << "Freeing " << ((fusion_bf_node*)ptr)->id << endl;
     }
 
 #endif

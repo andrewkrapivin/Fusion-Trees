@@ -10,12 +10,12 @@ fusion_b_node* new_empty_node(SimpleAlloc<fusion_b_node, 64>& allocator) {
     fusion_b_node* new_node = allocator.alloc();
     memset(new_node, 0, sizeof(fusion_b_node));
     new_node->id = IDCounter++;
+    // cout << "Allocated " << new_node->id << endl;
     return new_node;
 }
 
 fusion_b_node* search_key_full_tree(fusion_b_node* root, __m512i key) {
     int branch = query_branch_node(&root->fusion_internal_tree, key);
-    //cout << "branching " << branch << endl;
     if(branch < 0 || root->children[branch] == NULL) { // either key exact match found or nowhere down to go
         branch = ~branch;
         return root;
@@ -33,6 +33,7 @@ fusion_b_node* insert_full_tree(fusion_b_node* root, __m512i key, SimpleAlloc<fu
     }
 
     fusion_b_node* key_node = search_key_full_tree(root, key);
+    // cout << "id: " << key_node->id << endl;
     if(!node_full(&key_node->fusion_internal_tree)) {
         insert_key_node(&key_node->fusion_internal_tree, key);
         return root;
@@ -40,23 +41,31 @@ fusion_b_node* insert_full_tree(fusion_b_node* root, __m512i key, SimpleAlloc<fu
     __m512i pmedian = key;
     fusion_b_node* plefthalf = NULL;
     fusion_b_node* prighthalf = NULL;
-    //printTree(root);
+    // printTree(root);
     while(node_full(&key_node->fusion_internal_tree)) {
-    	//print_keys_sig_bits(&key_node->fusion_internal_tree);
+        // print_keys_sig_bits(&key_node->fusion_internal_tree);
         fusion_node* key_fnode = &key_node->fusion_internal_tree;
         int keypos = query_branch_node(key_fnode, pmedian);
+        // cout << "Keypos: " << keypos << ", and keynode is fast: "<< key_fnode->tree.meta.fast << endl;
+        // print_binary_uint64_big_endian(pmedian[7], true, 64, 16);
+        // print_binary_uint64_big_endian(get_key_from_sorted_pos(key_fnode, 0)[7], true, 64, 16);
         if(keypos < 0) //already in the tree. Should only be true on the first loop time. If something breaks and that isnt the case, this will be bad
             return root;
         __m512i newmedian;
         fusion_b_node* newlefthalf = new_empty_node(allocator);
+        // print_binary_uint64_big_endian(get_key_from_sorted_pos(key_fnode, 0)[7], true, 64, 16);
         fusion_b_node* newrighthalf = new_empty_node(allocator);
+        // print_binary_uint64_big_endian(get_key_from_sorted_pos(key_fnode, 0)[7], true, 64, 16);
         //just adding half the keys to the left size and half to the right
         for(int i=0, j=0; i < MAX_FUSION_SIZE+1; i++) {
             fusion_b_node* curchild = i == keypos ? plefthalf : (i == (keypos+1) ? prighthalf : key_node->children[j]); //p hacky, probably fix this
-            /*if(curchild != NULL) {
-            	cout << "curchild is " << curchild->id << endl;
-            }*/
+            // if(curchild != NULL) {
+            // 	cout << "curchild is " << curchild->id << endl;
+            // }
+            // cout << "j is " << j << endl;
+            // print_binary_uint64_big_endian(get_key_from_sorted_pos(key_fnode, j)[7], true, 64, 16);
             __m512i curkey = i == keypos ? pmedian : get_key_from_sorted_pos(key_fnode, j++);// and this
+            // print_binary_uint64_big_endian(curkey[7], true, 64, 16);
             if (i < MAX_FUSION_SIZE/2) {
                 insert_key_node(&newlefthalf->fusion_internal_tree, curkey);
                 newlefthalf->children[i] = curchild;
@@ -79,42 +88,57 @@ fusion_b_node* insert_full_tree(fusion_b_node* root, __m512i key, SimpleAlloc<fu
         { //one extra branch than keys, so add this child
             fusion_b_node* curchild = (MAX_FUSION_SIZE+1) == (keypos+1) ? prighthalf : key_node->children[MAX_FUSION_SIZE];
             newrighthalf->children[MAX_FUSION_SIZE/2] = curchild;
-            /*if(curchild != NULL) {
-            	cout << "curchild is " << curchild->id << endl;
-            }*/
+            // if(curchild != NULL) {
+            // 	cout << "curchild is " << curchild->id << endl;
+            // }
             if(curchild != NULL)
 	            curchild->parent = newrighthalf;
         }
         fusion_b_node* key_node_par = key_node->parent;
-        //printTree(root);
-        //cout << "Removing node " << key_node->id << endl;
+        // printTree(root);
         if(key_node->fusion_internal_tree.tree.meta.fast) {
             make_fast(&newlefthalf->fusion_internal_tree);
             make_fast(&newrighthalf->fusion_internal_tree);
         }
+        if(key_node_par != NULL)
+        // cout << "Key Node Par " << key_node_par->id << endl;
+        // cout << "Removing node " << key_node->id << endl;
         allocator.free(key_node);
         key_node = key_node_par;
         if(key_node == NULL) { // went "above root," then we want to create new root
+            // cout << "DSFSDFS" << endl;
             root = new_empty_node(allocator);
             key_node = root;
         }
         pmedian = newmedian;
         plefthalf = newlefthalf;
         prighthalf = newrighthalf;
-        /*cout << "printing new left half" << endl;
-        print_keys_sig_bits(&newlefthalf->fusion_internal_tree);
-        cout << "printing new right half" << endl;
-        print_keys_sig_bits(&newrighthalf->fusion_internal_tree);
-        cout << "New median: " << endl;
-        print_binary_uint64_big_endian(pmedian[7], true, 64, 8);*/
+        // cout << "printing new left half (" << newlefthalf->id << ")" << endl;
+        // print_keys_sig_bits(&newlefthalf->fusion_internal_tree);
+        // cout << "printing new right half (" << newrighthalf->id << ")" << endl;
+        // print_keys_sig_bits(&newrighthalf->fusion_internal_tree);
+        // cout << "New median: " << endl;
+        // print_binary_uint64_big_endian(pmedian[7], true, 64, 8);
     }
-    //printTree(root);
-	//cout << ((int)plefthalf->fusion_internal_tree.tree.meta.size) << " " << ((int)prighthalf->fusion_internal_tree.tree.meta.size) << endl;
+    // printTree(root);
+	// cout << ((int)plefthalf->fusion_internal_tree.tree.meta.size) << " " << ((int)prighthalf->fusion_internal_tree.tree.meta.size) << endl;
+    // print_keys_sig_bits(&key_node->fusion_internal_tree);
     insert_key_node(&key_node->fusion_internal_tree, pmedian);
-    if(!key_node->fusion_internal_tree.tree.meta.fast) make_fast(&key_node->fusion_internal_tree);
-    //cout << "New things" << endl;
-    //print_keys_sig_bits(&key_node->fusion_internal_tree);
+    if(!key_node->fusion_internal_tree.tree.meta.fast) {make_fast(&key_node->fusion_internal_tree);}
+    // cout << "New things" << endl;
+    // print_binary_uint64(key_node->fusion_internal_tree.tree.bitextract[0], true);
+    // print_keys_sig_bits(&key_node->fusion_internal_tree);
+    fusion_node tmp = {0};
+    for(int i=0; i < key_node->fusion_internal_tree.tree.meta.size; i++) {
+        insert(&tmp, key_node->fusion_internal_tree.keys[i]);
+    }
+    // cout << "dafdftmp " << extract_bits(&tmp.tree, tmp.keys[0]) << " " << extract_bits(&tmp.tree, tmp.keys[1])<< endl;
+    // print_binary_uint64(tmp.tree.bitextract[0], true);
+    // print_keys_sig_bits(&tmp);
+    // cout << "dafdf " << extract_bits(&key_node->fusion_internal_tree.tree, key_node->fusion_internal_tree.keys[0]) << " " << extract_bits(&key_node->fusion_internal_tree.tree, key_node->fusion_internal_tree.keys[1])<< endl;
+    // print_vec(key_node->fusion_internal_tree.tree.treebits, true, 16);
     int npos = ~query_branch_node(&key_node->fusion_internal_tree, pmedian);
+    // cout << "npos is " << (~npos) << endl;
     //shifting to make room for new children (& we want to ignore the actual child that will be replaced by the two children, which should be at the position of the new key)
     //The child we want to replace is exactly at the position of the added median, since it was to the "right" of the key smaller than the median and to the "left" of the key larger than the median, so its position is one more than the position of the key to the "left" of the median now, so the position of the median. Thus we want to ignore that key and move the things to the right of that by one
     //cout << "Npos is " << npos << endl;
@@ -122,10 +146,13 @@ fusion_b_node* insert_full_tree(fusion_b_node* root, __m512i key, SimpleAlloc<fu
     for(int i=key_node->fusion_internal_tree.tree.meta.size /*ok that is ridiculous, fix that*/; i >= npos+2; i--) {
         key_node->children[i] = key_node->children[i-1];
     }
+    // if(plefthalf->id == 6) cout << "DFSDF " << npos <<  endl;
+    // printTree(root);
     key_node->children[npos] = plefthalf;
     key_node->children[npos+1] = prighthalf;
     plefthalf->parent = key_node;
     prighthalf->parent = key_node;
+    // printTree(root);
     //cout << "plefthalf id is " << plefthalf->id << ", prighthalf id is " << prighthalf->id << ", and key_node id is " << key_node->id << endl;
     
     return root;
@@ -204,17 +231,19 @@ void printTree(fusion_b_node* root, int indent) {
 	root->visited = true;
 	int branchcount = 0;
 	for(int i = 0; i < MAX_FUSION_SIZE+1; i++) {
-		if(root->children[i] != NULL)
+		if(root->children[i] != NULL) {
 			branchcount++;
+        }
 	}
 	for(int i = 0; i < indent; i++) cout << " ";
 	if(root->parent != NULL)
 		cout << "Node " << root->id << " has " << root->parent->id << " as a parent." << endl;
 	for(int i = 0; i < indent; i++) cout << " ";
-	cout << "Node " << root->id << " has " << branchcount << " children. Exploring them now: {" << endl;
+	cout << "Node " << root->id << " has " << branchcount << " children (size of fusion node: " << (int)root->fusion_internal_tree.tree.meta.size << ") Exploring them now: {" << endl;
 	for(int i = 0; i < MAX_FUSION_SIZE+1; i++) {
-		if(root->children[i] != NULL)
+		if(root->children[i] != NULL) {
 			printTree(root->children[i], indent+4);
+        }
 	}
 	root->visited = false;
 	for(int i = 0; i < indent; i++) cout << " ";
@@ -249,5 +278,5 @@ size_t totalDepth(fusion_b_node* root, size_t dep) {
 }
 
 size_t memUsage(fusion_b_node* root) { // in MB
-    return numNodes(root)*sizeof(fusion_b_node)/1000000;
+    return numNodes(root)*sizeof(fusion_b_node);
 }

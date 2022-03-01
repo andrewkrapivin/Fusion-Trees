@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <cassert>
 
 extern const fusion_node Empty_Fusion_Node = {0};
 
@@ -21,7 +22,8 @@ inline uint64_t get_uint64_from_m512(__m512i vec, int pos) {
 	return lowestlong;
 }
 
-int first_diff_bit_pos(__m512i x, __m512i y) {//there is def some confusion here with me about big endian/little endian so maybe need to change this a bit
+int my_first_diff_bit_pos(__m512i x, __m512i y, const char* file, int line) {//there is def some confusion here with me about big endian/little endian so maybe need to change this a bit
+	//cout << "File: " << file << ", line: " << line << endl;
 	__m512i z = _mm512_xor_si512(x, y);
 	/*for(int i = 0; i < 8; i++) {
 		cout << z[i] << " "; 
@@ -171,6 +173,7 @@ uint8_t get_real_pos_from_sorted_pos(fusion_node* node, int index_in_sorted) {
 }
 
 __m512i get_key_from_sorted_pos(fusion_node* node, int index_in_sorted) {
+	if(node->tree.meta.fast) return node->keys[index_in_sorted];
 	__mmask16 pos_mask = _cvtu32_mask16((1 << index_in_sorted)); //we want the position of this element and the next position of course for our comparison
 	__m128i extracting_position = _mm_maskz_compress_epi8(pos_mask, node->key_positions);
 	uint8_t position = _mm_extract_epi8(extracting_position, 0);
@@ -480,7 +483,10 @@ int query_branch_fast(fusion_node* node, __m512i key) {
 	//__m512i first_guess = get_key_from_sorted_pos(node, first_guess_pos);
 	__m512i first_guess = node->keys[first_guess_pos];
 	
+	//print_vec(key, true);
+	//cout << first_guess_pos << " adsfasdf " << node->tree.meta.size << endl;
 	int diff_bit_pos = first_diff_bit_pos(first_guess, key);
+	//cout << "diff bit pos: " << diff_bit_pos << endl;
 
 	//cout << "Query guess: " << first_guess_pos << ", basemask: " << first_basemask << ", diff_bit_pos: " << diff_bit_pos << endl;
 	
@@ -491,30 +497,61 @@ int query_branch_fast(fusion_node* node, __m512i key) {
 	int mask_pos = diff_bit_to_mask_pos(node, diff_bit_pos);
 	int diff_bit_val = get_bit_from_pos(key, diff_bit_pos);
 	int second_guess_pos = search_partial_pos_tree2_fast(node, first_basemask, abs(mask_pos), diff_bit_val);
+	//cout << "SD:LKFJSD:LKFJ:LSDKF:LSDKJ" << endl;
 	return second_guess_pos;
 }
 
 void make_fast(fusion_node* node, bool sort /* = true */) {
-	if(sort)
-		std::sort(node->keys, node->keys+node->tree.meta.size, compare__m512i);
-	for(int i=0; i<node->tree.meta.size; i++) {
-		uint16_t sketch = extract_bits(&node->tree, node->keys[i]);
-		insert_mask(node->tree.treebits, sketch, i, false);
+	// return;
+	if(node->tree.meta.size == 0) {
+		node->tree.meta.fast = true;
+		return;
 	}
+	assert(node->tree.meta.size != 0);
+	//cout << "Making fast w/ " << node->tree.meta.size << endl;
+	if(sort) {
+		std::sort(node->keys, node->keys+node->tree.meta.size, compare__m512i);
+		// cout << (int)node->tree.meta.size << endl;
+		// for(int i=0; i<node->tree.meta.size; i++)
+		// 	//print_binary_uint64_big_endian(node->keys[i][7], false, 8, 8);
+		// 	print_vec(node->keys[i], true);
+		// cout << endl;
+	}
+	// cout << "CLD" << endl;
+	// print_binary_uint64(node->tree.bitextract[0], true);
+	for(int i=0; i<node->tree.meta.size; i++) {
+		// print_vec(node->tree.treebits, true, 16);
+		uint16_t sketch = extract_bits(&node->tree, node->keys[i]);
+		// print_binary_uint64(sketch, true);
+		node->tree.treebits = insert_mask(node->tree.treebits, sketch, i, false);
+		// print_vec(node->tree.treebits, true, 16);
+	}
+	// print_vec(node->tree.treebits, true, 16);
 	node->tree.meta.fast = true;
 }
 
 //Not actually fast lol. Just for inserting into the node that has fast search
 int insert_fast(fusion_node* node, __m512i key) {
+	if(node->tree.meta.size == 0) { //Should we assume that key_positions[0] is zero?
+		//cout << "SDLJFLKSDJF" << endl;
+		node->keys[0] = key;
+		//cout << "SDLJFLKSDJF" << endl;
+		node->tree.meta.size++;
+		return 1;
+	}
+
 	if(node->tree.meta.size == MAX_FUSION_SIZE)
 		return -1;
 	int i = 0;
-	//could be binary search but this algo is O(n) anyways so doesn't matter
-	for(; compare__m512i(key, node->keys[i]); i++);
-	int diff_bit_pos = first_diff_bit_pos(node->keys[i], key);
+
+	uint16_t first_sketch = extract_bits(&node->tree, key);
+	int first_guess_pos = search_pos_tree_fast(node, first_sketch);
+	
+	int diff_bit_pos = first_diff_bit_pos(node->keys[first_guess_pos], key);
 	if (diff_bit_pos == -1) {
 		return -2;
 	}
+	//cout << "diff_bit_pos " << diff_bit_pos << endl;
 	
 	int mask_pos = diff_bit_to_mask_pos(node, diff_bit_pos);
 	
@@ -522,11 +559,21 @@ int insert_fast(fusion_node* node, __m512i key) {
 		add_position_to_extraction_mask(&node->tree, diff_bit_pos);
 	}
 
-	make_fast(node, false);
+	node->keys[node->tree.meta.size] = key;
+	
+	node->tree.meta.size++;
+	// print_keys_sig_bits(node);
+
+	make_fast(node, true);
 	return 0;
 }
 
-int query_branch_node(fusion_node* node, __m512i key) {
+int my_query_branch_node(fusion_node* node, __m512i key, const char* file, int line) {
+	//cout << (int) node->tree.meta.size << endl;
+	//cout << "WTF2, file: " <<  file << ", line: " << line << ", fast: " <<node->tree.meta.fast << endl;
+	if(node->tree.meta.size == 0) {
+		cout << "WTF, file: " <<  file << ", line: " << line << ", fast: " <<node->tree.meta.fast << endl;
+	}
 	if(node->tree.meta.fast) {
 		return query_branch_fast(node, key);
 	}
@@ -542,6 +589,6 @@ int insert_key_node(fusion_node* node, __m512i key) {
 
 void print_keys_sig_bits(fusion_node* node) {
 	for(int i=0; i<node->tree.meta.size; i++) {
-		print_binary_uint64_big_endian(get_key_from_sorted_pos(node, i)[7], true, 64, 8);
+		print_binary_uint64_big_endian(get_key_from_sorted_pos(node, i)[7], true, 64, 16);
 	}
 }
