@@ -22,7 +22,7 @@ inline uint64_t get_uint64_from_m512(__m512i vec, int pos) {
 	return lowestlong;
 }
 
-int my_first_diff_bit_pos(__m512i x, __m512i y, const char* file, int line) {//there is def some confusion here with me about big endian/little endian so maybe need to change this a bit
+int first_diff_bit_pos(__m512i x, __m512i y) {//there is def some confusion here with me about big endian/little endian so maybe need to change this a bit
 	//cout << "File: " << file << ", line: " << line << endl;
 	__m512i z = _mm512_xor_si512(x, y);
 	/*for(int i = 0; i < 8; i++) {
@@ -568,12 +568,12 @@ int insert_fast(fusion_node* node, __m512i key) {
 	return 0;
 }
 
-int my_query_branch_node(fusion_node* node, __m512i key, const char* file, int line) {
+int query_branch_node(fusion_node* node, __m512i key) {
 	//cout << (int) node->tree.meta.size << endl;
 	//cout << "WTF2, file: " <<  file << ", line: " << line << ", fast: " <<node->tree.meta.fast << endl;
-	if(node->tree.meta.size == 0) {
+	/*if(node->tree.meta.size == 0) {
 		cout << "WTF, file: " <<  file << ", line: " << line << ", fast: " <<node->tree.meta.fast << endl;
-	}
+	}*/
 	if(node->tree.meta.fast) {
 		return query_branch_fast(node, key);
 	}
