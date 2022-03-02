@@ -3,9 +3,16 @@
 
 #include <algorithm>
 #include <iostream>
+#include <cstring>
 #include <cassert>
 
 extern const fusion_node Empty_Fusion_Node = {0};
+
+fusion_node* new_empty_fusion_node() {
+	fusion_node* new_node = static_cast<fusion_node*>(std::aligned_alloc(64, sizeof(fusion_node)));
+    memset(new_node, 0, sizeof(fusion_node));
+    return new_node;
+}
 
 inline uint64_t get_uint64_from_m256(__m256i vec, int pos) {
 	__mmask8 pos_mask = _cvtu32_mask8(1 << pos);
@@ -77,7 +84,26 @@ inline int get_bit_from_pos(__m256i key, int pos) {//check if pos out of bounds?
 	return (element_containing_bit & (1ull << (pos%64))) != 0;
 }
 
-bool compare__m512i(__m512i a, __m512i b) { //remember for some reaon compare in sort is assumed to evaluate a < b
+//returns -1 if x=y, 0 if first diff bit of x is zero, 1 otherwise. This kind of nonstandard thing just to fit right into what I had b4
+inline int fast_first_diff_bit_val(__m512i x, __m512i y) {
+	// cout << "Comparing two numbers" << endl;
+	// print_binary_uint64_big_endian(x[7], true, 64, 8);
+    // print_binary_uint64_big_endian(y[7], true, 64, 8);
+	__mmask16 ne_mask = _mm512_cmp_epu32_mask(x, y, _MM_CMPINT_NE);
+	__mmask16 ge_mask = _mm512_cmp_epu32_mask(x, y, _MM_CMPINT_GE);
+	unsigned short ne = _cvtmask16_u32(ne_mask);
+	unsigned short ge = _cvtmask16_u32(ge_mask);
+	// cout << "The two important stuffs. ge: " << (ge & (1ull << 15)) << ", ne: " << (ne & (1ull << 15))<< endl;
+	unsigned int first_ne = 31 - _lzcnt_u32(ne);
+	// cout << "first ne: " << first_ne << endl; 
+	return ne == 0 ? -1 : ((ge & (1 << first_ne)) != 0);
+}
+
+bool fast_compare__m512i(__m512i a, __m512i b) {
+	return fast_first_diff_bit_val(a, b) == 0;
+}
+
+bool compare__m512i(__m512i a, __m512i b) { //remember for some reason compare in sort is assumed to evaluate a < b
 	int diffbitpos = first_diff_bit_pos(a, b);
 	//cout << "Comparing two nums:" << endl;
 	//print_vec(a, true);
@@ -510,7 +536,7 @@ void make_fast(fusion_node* node, bool sort /* = true */) {
 	assert(node->tree.meta.size != 0);
 	//cout << "Making fast w/ " << node->tree.meta.size << endl;
 	if(sort) {
-		std::sort(node->keys, node->keys+node->tree.meta.size, compare__m512i);
+		std::sort(node->keys, node->keys+node->tree.meta.size, fast_compare__m512i);
 		// cout << (int)node->tree.meta.size << endl;
 		// for(int i=0; i<node->tree.meta.size; i++)
 		// 	//print_binary_uint64_big_endian(node->keys[i][7], false, 8, 8);
@@ -571,9 +597,9 @@ int insert_fast(fusion_node* node, __m512i key) {
 int query_branch_node(fusion_node* node, __m512i key) {
 	//cout << (int) node->tree.meta.size << endl;
 	//cout << "WTF2, file: " <<  file << ", line: " << line << ", fast: " <<node->tree.meta.fast << endl;
-	/*if(node->tree.meta.size == 0) {
-		cout << "WTF, file: " <<  file << ", line: " << line << ", fast: " <<node->tree.meta.fast << endl;
-	}*/
+	// if(node->tree.meta.size == 0) {
+	// 	cout << "WTF, file: " <<  file << ", line: " << line << ", fast: " <<node->tree.meta.fast << endl;
+	// }
 	if(node->tree.meta.fast) {
 		return query_branch_fast(node, key);
 	}

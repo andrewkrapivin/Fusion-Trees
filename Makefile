@@ -1,5 +1,8 @@
 lazy: 
-	g++ SimpleAlloc.cpp test.cpp fusion_tree.cpp HelperFuncs.cpp FusionBTree.cpp -march=icelake-client -std=c++17 -O3
+	g++ SimpleAlloc.cpp test.cpp fusion_tree.cpp HelperFuncs.cpp FusionBTree.cpp FusionQSort.cpp -march=icelake-client -std=c++17 -O3
 
-no_opt:
-	g++ SimpleAlloc.cpp test.cpp fusion_tree.cpp HelperFuncs.cpp FusionBTree.cpp -march=icelake-client -std=c++17
+no_opt: 
+	g++ SimpleAlloc.cpp test.cpp fusion_tree.cpp HelperFuncs.cpp FusionBTree.cpp FusionQSort.cpp -march=icelake-client -std=c++17
+
+debug: 
+	g++ SimpleAlloc.cpp test.cpp fusion_tree.cpp HelperFuncs.cpp FusionBTree.cpp FusionQSort.cpp -march=icelake-client -std=c++17 -ggdb

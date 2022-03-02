@@ -46,17 +46,20 @@ extern const fusion_node Empty_Fusion_Node;
 	
 }*/
 
+fusion_node* new_empty_fusion_node();
+
 //are tehse even neccesary? Am I being ridiculous with all those instructions? Maybe better to just get vec[pos] like that?	
 inline uint64_t get_uint64_from_m256(__m256i vec, int pos);
 inline uint64_t get_uint64_from_m512(__m512i vec, int pos);
 
-//#define first_diff_bit_pos(x, y) my_first_diff_bit_pos(x, y, __FILE__, __LINE__)
+// #define first_diff_bit_pos(x, y) my_first_diff_bit_pos(x, y, __FILE__, __LINE__)
 //int first_diff_bit_pos(__m512i x, __m512i y); // seems works
 int first_diff_bit_pos(__m512i x, __m512i y);
 
 inline int get_bit_from_pos(__m256i key, int pos);
 inline int get_bit_from_pos(__m512i key, int pos);
 
+bool fast_compare__m512i(__m512i a, __m512i b);
 bool compare__m512i(__m512i a, __m512i b);
 
 inline __m256i setbit_each_epi16_in_range(__m256i src, int epi16pos, int low, int high, int bit = 1);
@@ -96,13 +99,15 @@ int insert(fusion_node* node, __m512i key);
 
 int query_branch(fusion_node* node, __m512i key); //for now returns the bitwise complement if key is found
 
+inline int search_pos_tree_fast(fusion_node* node, uint16_t basemask);
+
 int query_branch_fast(fusion_node* node, __m512i key);
 
 void make_fast(fusion_node* node, bool sort = true);
 
 int insert_fast(fusion_node* node, __m512i key);
 
-//#define query_branch_node(x, y) my_query_branch_node(x, y, __FILE__, __LINE__)
+// #define query_branch_node(x, y) my_query_branch_node(x, y, __FILE__, __LINE__)
 //int query_branch_node(fusion_node* node, __m512i key);
 int query_branch_node(fusion_node* node, __m512i key);
 int insert_key_node(fusion_node* node, __m512i key);
