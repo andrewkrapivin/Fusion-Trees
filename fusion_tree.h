@@ -59,6 +59,7 @@ int first_diff_bit_pos(__m512i x, __m512i y);
 inline int get_bit_from_pos(__m256i key, int pos);
 inline int get_bit_from_pos(__m512i key, int pos);
 
+bool fast_compare__m512i(__m512i a, __m512i b);
 bool compare__m512i(__m512i a, __m512i b);
 
 inline __m256i setbit_each_epi16_in_range(__m256i src, int epi16pos, int low, int high, int bit = 1);
