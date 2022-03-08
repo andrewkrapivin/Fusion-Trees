@@ -48,9 +48,10 @@ int first_diff_bit_pos(__m512i x, __m512i y) {//there is def some confusion here
 	//__m128i nzbytes = _mm512_extracti64x2_epi64(z, significant_one_index/2);
 	//uint64_t diffbyte = _mm_extract_epi64(nzbytes, significant_one_index%2);
 	w = _mm512_maskz_compress_epi32(significant_one_mask, z); //must be a better way to do this
-	__m128i lowerbytes = _mm512_extracti64x2_epi64(w, 0);
+	// __m128i lowerbytes = _mm512_extracti64x2_epi64(w, 0);
 	//unsigned int diffint = _mm512_cvtsi512_si32(w);
-	unsigned int diffint = _mm_extract_epi32(lowerbytes, 0);
+	// unsigned int diffint = _mm_extract_epi32(lowerbytes, 0);
+	unsigned int diffint = _mm512_cvtsi512_si32(w);
 	return 32*significant_one_index + (31 - _lzcnt_u32(diffint));
 }
 
@@ -199,11 +200,12 @@ uint8_t get_real_pos_from_sorted_pos(fusion_node* node, int index_in_sorted) {
 }
 
 __m512i get_key_from_sorted_pos(fusion_node* node, int index_in_sorted) {
-	if(node->tree.meta.fast) return node->keys[index_in_sorted];
-	__mmask16 pos_mask = _cvtu32_mask16((1 << index_in_sorted)); //we want the position of this element and the next position of course for our comparison
-	__m128i extracting_position = _mm_maskz_compress_epi8(pos_mask, node->key_positions);
-	uint8_t position = _mm_extract_epi8(extracting_position, 0);
-	return node->keys[position];
+	// if(node->tree.meta.fast) return node->keys[index_in_sorted];
+	// __mmask16 pos_mask = _cvtu32_mask16((1 << index_in_sorted)); //we want the position of this element and the next position of course for our comparison
+	// __m128i extracting_position = _mm_maskz_compress_epi8(pos_mask, node->key_positions);
+	// uint8_t position = _mm_extract_epi8(extracting_position, 0);
+	// return node->keys[position];
+	return node->keys[index_in_sorted];
 }
 
 __m512i search_key(fusion_node* node, uint16_t basemask) {
@@ -483,23 +485,36 @@ inline int search_pos_tree_fast(fusion_node* node, uint16_t basemask) {
 	//cout << "Pos_arr is " << pos_arr << endl;
 	//basically we want to see whether the pos_arr or pos_arr+1 matches the basemask more closely, cause pos_arr and pos_arr+1 obviously difffer in one bit and we want to see which "path" or branch basemask takes at that differing bit
 	//clearly, if we've reached the rightmost node of the tree, we are done
-	if(pos_arr == node->tree.meta.size-1) return pos_arr;
+	// if(pos_arr == node->tree.meta.size-1) return pos_arr;
 	__mmask16 pos_mask = _cvtu32_mask16((1 << pos_arr) * 3); //we want the position of this element and the next position of course for our comparison
 	__m256i movinglongtofront = _mm256_maskz_compress_epi16(pos_mask, node->tree.treebits);
-	__m128i lowerbytes = _mm256_extracti64x2_epi64(movinglongtofront, 0);
-	uint32_t lowestint = _mm_extract_epi32(lowerbytes, 0);
+	// __m128i lowerbytes = _mm256_extracti64x2_epi64(movinglongtofront, 0);
+	// uint32_t lowestint = _mm_extract_epi32(lowerbytes, 0);
+	uint32_t lowestint = _mm256_cvtsi256_si32(movinglongtofront);
 	//now we want the element which more closely matches, so the one with the smaller first differing bit
-	const uint32_t otherkeypos = 1 << 16;
+	constexpr uint32_t otherkeypos = 1 << 16;
 	lowestint ^= ((uint32_t) basemask) * (otherkeypos + 1); //xor each part to get first differing bit with each compressed key. We then just need to see which part is smaller!
-	return ((lowestint%otherkeypos) < (lowestint/otherkeypos)) ? pos_arr : (pos_arr+1);
+	return ((lowestint%otherkeypos) < (lowestint/otherkeypos) || pos_arr == node->tree.meta.size-1) ? pos_arr : (pos_arr+1);
+}
+
+inline uint16_t get_partial_basemask(fusion_node* node, uint16_t basemask, int cutoff_pos, bool largest) {
+	uint16_t partial_basemask = basemask & (~((1 << cutoff_pos) - 1)); //remember to use ~ not ! for bitwise lol
+	partial_basemask = largest ? (partial_basemask + ((1 << cutoff_pos) - 1)) : partial_basemask;
+	return partial_basemask;
 }
 
 inline int search_partial_pos_tree2_fast(fusion_node* node, uint16_t basemask, int cutoff_pos, bool largest) {
 	uint16_t partial_basemask = basemask & (~((1 << cutoff_pos) - 1)); //remember to use ~ not ! for bitwise lol
 	partial_basemask = largest ? (partial_basemask + ((1 << cutoff_pos) - 1)) : partial_basemask;
+	// cout << "pp" << endl;
+	// print_binary_uint64(partial_basemask, true);
 	//cout << "cutoff_pos is " << cutoff_pos << ", partial basemask is " << partial_basemask << " FDSFSD " << search_pos_arr(node, partial_basemask) <<  endl;
 	return search_position_fast(node, partial_basemask, largest);
 }
+
+// inline __m512i getKeyMasked(__m512i key, __m512i first_guess) {
+	
+// }
 
 int query_branch_fast(fusion_node* node, __m512i key) {
 	uint16_t first_basemask = extract_bits(&node->tree, key);
@@ -509,22 +524,122 @@ int query_branch_fast(fusion_node* node, __m512i key) {
 	//__m512i first_guess = get_key_from_sorted_pos(node, first_guess_pos);
 	__m512i first_guess = node->keys[first_guess_pos];
 	
-	//print_vec(key, true);
-	//cout << first_guess_pos << " adsfasdf " << node->tree.meta.size << endl;
-	int diff_bit_pos = first_diff_bit_pos(first_guess, key);
-	//cout << "diff bit pos: " << diff_bit_pos << endl;
+	// //print_vec(key, true);
+	// //cout << first_guess_pos << " adsfasdf " << node->tree.meta.size << endl;
+	// int diff_bit_pos = first_diff_bit_pos(first_guess, key);
+	// //cout << "diff bit pos: " << diff_bit_pos << endl;
 
-	//cout << "Query guess: " << first_guess_pos << ", basemask: " << first_basemask << ", diff_bit_pos: " << diff_bit_pos << endl;
+	// //cout << "Query guess: " << first_guess_pos << ", basemask: " << first_basemask << ", diff_bit_pos: " << diff_bit_pos << endl;
 	
-	if (diff_bit_pos == -1) { //key is already in there
-		return ~first_guess_pos; //idk if its negative then let's say you've found the exact key
-	}
+	// if (diff_bit_pos == -1) { //key is already in there
+	// 	return ~first_guess_pos; //idk if its negative then let's say you've found the exact key
+	// }
 	
-	int mask_pos = diff_bit_to_mask_pos(node, diff_bit_pos);
-	int diff_bit_val = get_bit_from_pos(key, diff_bit_pos);
-	int second_guess_pos = search_partial_pos_tree2_fast(node, first_basemask, abs(mask_pos), diff_bit_val);
-	//cout << "SD:LKFJSD:LKFJ:LSDKF:LSDKJ" << endl;
-	return second_guess_pos;
+	// int mask_pos = diff_bit_to_mask_pos(node, diff_bit_pos);
+	// int diff_bit_val = get_bit_from_pos(key, diff_bit_pos);
+	// int second_guess_pos = search_partial_pos_tree2_fast(node, first_basemask, abs(mask_pos), diff_bit_val);
+	// //cout << "SD:LKFJSD:LKFJ:LSDKF:LSDKJ" << endl;
+	// return second_guess_pos;
+
+	__mmask16 ne_mask = _mm512_cmp_epu32_mask(key, first_guess, _MM_CMPINT_NE);
+	__mmask16 ge_mask = _mm512_cmp_epu32_mask(key, first_guess, _MM_CMPINT_GE);
+	unsigned short ne = _cvtmask16_u32(ne_mask);
+	unsigned short ge = _cvtmask16_u32(ge_mask);
+	// cout << "The two important stuffs. ge: " << (ge & (1ull << 15)) << ", ne: " << (ne & (1ull << 15))<< endl;
+	unsigned int first_ne = 31 - _lzcnt_u32(ne);
+	first_ne = 1 << first_ne;
+	// cout << "first ne: " << first_ne << endl; 
+	// int diff_bit_val = ne == 0 ? -1 : ((ge & first_ne) != 0);
+	if(!ne) return ~first_guess_pos;
+	// assert(((ge & first_ne) != 0) == diff_bit_val);
+	int diff_bit_val = (ge & first_ne) != 0;
+
+	__m512i z = _mm512_xor_si512(key, first_guess);
+	__mmask16 significant_one_mask = _cvtu32_mask16(first_ne);
+	z = _mm512_maskz_compress_epi32(significant_one_mask, z);
+	unsigned int diffint = _mm512_cvtsi512_si32(z);
+	unsigned int loc = 31 - _lzcnt_u32(diffint);
+	diffint = (1 << loc) - 1;
+	z = _mm512_maskz_set1_epi32(significant_one_mask, diffint);
+	__mmask16 lower_mask = _kadd_mask16(significant_one_mask, -1);
+	z = _mm512_mask_set1_epi32(z, lower_mask, -1);
+	__m512i trimmed_key = _mm512_andnot_si512(z, key);
+	trimmed_key = (!diff_bit_val) ? _mm512_or_si512(z, trimmed_key) : trimmed_key;
+	trimmed_key = _mm512_add_epi32(trimmed_key, _mm512_maskz_set1_epi32(_kor_mask16(significant_one_mask, lower_mask), 1-2*diff_bit_val));
+
+	uint16_t second_sketch = extract_bits(&node->tree, trimmed_key);
+	// cout << "pp2" << endl;
+	// print_binary_uint64(second_sketch, true);
+	int real_pos = search_position_fast(node, second_sketch, diff_bit_val);
+	// if(real_pos != second_guess_pos) {
+	// 	cout << "pp2 " << real_pos << " " << second_guess_pos << " " << (512-diff_bit_pos) << " " << diff_bit_val << endl;
+	// 	print_binary_uint64_big_endian(key[7], true, 64, 32);
+	// 	print_binary_uint64_big_endian(trimmed_key[7], true, 64, 32);
+	// 	print_binary_uint64_big_endian(z[7], true, 64, 32);
+	// 	print_binary_uint64(second_sketch, true);
+	// 	print_binary_uint64(get_partial_basemask(node, first_basemask, abs(mask_pos), diff_bit_val), true);
+	// 	print_binary_uint64(significant_one_mask, true);
+	// 	print_binary_uint64(lower_mask, true);
+	// 	print_keys_sig_bits(node, 32);
+	// 	exit(1);
+	// }
+	// assert(real_pos == second_guess_pos);
+	return real_pos;
+	//_mm512_lzcnt_epi32
+}
+
+int query_branch_fast2(fusion_node* node, __m512i key) {
+	uint16_t first_basemask = extract_bits(&node->tree, key);
+	
+	int first_guess_pos = search_pos_tree_fast(node, first_basemask);
+	
+	//__m512i first_guess = get_key_from_sorted_pos(node, first_guess_pos);
+	__m512i first_guess = node->keys[first_guess_pos];
+
+	__mmask16 ne_mask = _mm512_cmp_epu32_mask(key, first_guess, _MM_CMPINT_NE);
+	__mmask16 ge_mask = _mm512_cmp_epu32_mask(key, first_guess, _MM_CMPINT_GE);
+	unsigned short ne = _cvtmask16_u32(ne_mask);
+	unsigned short ge = _cvtmask16_u32(ge_mask);
+	// cout << "The two important stuffs. ge: " << (ge & (1ull << 15)) << ", ne: " << (ne & (1ull << 15))<< endl;
+	unsigned int first_ne = 31 - _lzcnt_u32(ne);
+	first_ne = 1 << first_ne;
+	// cout << "first ne: " << first_ne << endl; 
+	// int diff_bit_val = ne == 0 ? -1 : ((ge & first_ne) != 0);
+	if(!ne) return ~first_guess_pos;
+	// assert(((ge & first_ne) != 0) == diff_bit_val);
+	int diff_bit_val = (ge & first_ne) != 0;
+
+	__m512i z = _mm512_xor_si512(key, first_guess);
+	__mmask16 significant_one_mask = _cvtu32_mask16(first_ne);
+	z = _mm512_maskz_compress_epi32(significant_one_mask, z);
+	unsigned int diffint = _mm512_cvtsi512_si32(z);
+	unsigned int loc = 31 - _lzcnt_u32(diffint);
+	diffint = (1 << loc) - 1;
+	z = _mm512_maskz_set1_epi32(significant_one_mask, diffint);
+	__mmask16 lower_mask = _kadd_mask16(significant_one_mask, -1);
+	z = _mm512_mask_set1_epi32(z, lower_mask, -1);
+	__m512i trimmed_key = _mm512_andnot_si512(z, key);
+	trimmed_key = (!diff_bit_val) ? _mm512_or_si512(z, trimmed_key) : trimmed_key;
+	trimmed_key = _mm512_add_epi32(trimmed_key, _mm512_maskz_set1_epi32(_kor_mask16(significant_one_mask, lower_mask), 1-2*diff_bit_val));
+
+	uint16_t second_sketch = extract_bits(&node->tree, trimmed_key);
+	// cout << "pp2" << endl;
+	// print_binary_uint64(second_sketch, true);
+	int real_pos = search_position_fast(node, second_sketch, diff_bit_val);
+	// if(real_pos != second_guess_pos) {
+	// 	cout << "pp2 " << real_pos << " " << second_guess_pos << " " << (512-diff_bit_pos) << " " << diff_bit_val << endl;
+	// 	print_binary_uint64_big_endian(key[7], true, 64, 32);
+	// 	print_binary_uint64_big_endian(trimmed_key[7], true, 64, 32);
+	// 	print_binary_uint64_big_endian(z[7], true, 64, 32);
+	// 	print_binary_uint64(second_sketch, true);
+	// 	print_binary_uint64(get_partial_basemask(node, first_basemask, abs(mask_pos), diff_bit_val), true);
+	// 	print_binary_uint64(significant_one_mask, true);
+	// 	print_binary_uint64(lower_mask, true);
+	// 	print_keys_sig_bits(node, 32);
+	// 	exit(1);
+	// }
+	// assert(real_pos == second_guess_pos);
+	return real_pos;
 }
 
 void make_fast(fusion_node* node, bool sort /* = true */) {
@@ -600,21 +715,23 @@ int query_branch_node(fusion_node* node, __m512i key) {
 	// if(node->tree.meta.size == 0) {
 	// 	cout << "WTF, file: " <<  file << ", line: " << line << ", fast: " <<node->tree.meta.fast << endl;
 	// }
-	if(node->tree.meta.fast) {
-		return query_branch_fast(node, key);
-	}
-	return query_branch(node, key);
+	// if(node->tree.meta.fast) {
+	// 	return query_branch_fast(node, key);
+	// }
+	// return query_branch(node, key);
+	return query_branch_fast(node, key);
 }
 
 int insert_key_node(fusion_node* node, __m512i key) {
-	if(node->tree.meta.fast) {
-		return insert_fast(node, key);
-	}
-	return insert(node, key);
+	// if(node->tree.meta.fast) {
+	// 	return insert_fast(node, key);
+	// }
+	// return insert(node, key);
+	return insert_fast(node, key);
 }
 
-void print_keys_sig_bits(fusion_node* node) {
+void print_keys_sig_bits(fusion_node* node, int numbits) {
 	for(int i=0; i<node->tree.meta.size; i++) {
-		print_binary_uint64_big_endian(get_key_from_sorted_pos(node, i)[7], true, 64, 16);
+		print_binary_uint64_big_endian(get_key_from_sorted_pos(node, i)[7], true, 64, numbits);
 	}
 }
