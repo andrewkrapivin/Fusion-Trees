@@ -2,6 +2,8 @@
 #include "HelperFuncs.h"
 #include <iostream>
 #include <cstring>
+#include <assert.h>
+#include <bitset>
 
 uint64_t IDCounter = 0;
 
@@ -17,7 +19,7 @@ fusion_b_node* new_empty_node(SimpleAlloc<fusion_b_node, 64>& allocator) {
 fusion_b_node* search_key_full_tree(fusion_b_node* root, __m512i key) {
     int branch = query_branch_node(&root->fusion_internal_tree, key);
     if(branch < 0 || root->children[branch] == NULL) { // either key exact match found or nowhere down to go
-        branch = ~branch;
+        // branch = ~branch;
         return root;
     }
     return search_key_full_tree(root->children[branch], key);
@@ -239,6 +241,7 @@ void printTree(fusion_b_node* root, int indent) {
 	if(root->parent != NULL)
 		cout << "Node " << root->id << " has " << root->parent->id << " as a parent." << endl;
 	for(int i = 0; i < indent; i++) cout << " ";
+    // cout << "isfull: " << node_full(&root->fusion_internal_tree) << ", ";
 	cout << "Node " << root->id << " has " << branchcount << " children (size of fusion node: " << (int)root->fusion_internal_tree.tree.meta.size << ") Exploring them now: {" << endl;
 	for(int i = 0; i < MAX_FUSION_SIZE+1; i++) {
 		if(root->children[i] != NULL) {
@@ -280,3 +283,177 @@ size_t totalDepth(fusion_b_node* root, size_t dep) {
 size_t memUsage(fusion_b_node* root) { // in MB
     return numNodes(root)*sizeof(fusion_b_node);
 }
+
+
+
+//assumes has full control (that is, node and par has the mutex). Also assumes the node is full and par is not full for simplicity
+static void split_node(fusion_b_node* node, fusion_b_node* par) {
+    // cout << "splitting node" << endl;
+    // printTree(node);
+    fusion_node* key_fnode = &node->fusion_internal_tree;
+
+    fusion_b_node* newlefthalf = new fusion_b_node();
+    // newlefthalf->id = ++IDCounter; //not thread safe but this is just for debugging anyways
+    fusion_b_node* newrighthalf = new fusion_b_node();
+    // newrighthalf->id = ++IDCounter; //not thread safe but this is just for debugging anyways
+
+    constexpr int medpos = MAX_FUSION_SIZE/2; //two choices since max size even: maybe randomize?
+    // cout << "SDFSDFSDF" << endl;
+    for(int i = 0; i < medpos; i++) {
+        insert(&newlefthalf->fusion_internal_tree, get_key_from_sorted_pos(&node->fusion_internal_tree, i));
+        newlefthalf->children[i] = node->children[i];
+        if (node->children[i] != NULL)
+            node->children[i]->parent = newlefthalf;
+    }
+    // cout << "SDFSDFSDF" << endl;
+    newlefthalf->children[medpos] = node->children[medpos];
+    if (node->children[medpos] != NULL)
+        node->children[medpos]->parent = newlefthalf;
+    for(int i = medpos+1; i < MAX_FUSION_SIZE; i++) {
+        insert(&newrighthalf->fusion_internal_tree, get_key_from_sorted_pos(&node->fusion_internal_tree, i));
+        newrighthalf->children[i-medpos-1] = node->children[i];
+        if (node->children[i] != NULL)
+            node->children[i]->parent = newrighthalf;
+    }
+    newrighthalf->children[MAX_FUSION_SIZE-medpos-1] = node->children[MAX_FUSION_SIZE];
+    if (node->children[MAX_FUSION_SIZE] != NULL)
+        node->children[MAX_FUSION_SIZE]->parent = newrighthalf;
+
+    if(node->fusion_internal_tree.tree.meta.fast) {
+        make_fast(&newlefthalf->fusion_internal_tree);
+        make_fast(&newrighthalf->fusion_internal_tree);
+    }
+
+    __m512i median = get_key_from_sorted_pos(&node->fusion_internal_tree, medpos);
+    // cout << "SDFSDFSDF" << endl;
+
+    if(par == NULL) {
+        // cout << "DSFSDFSDFSDFSDF" << endl;
+        memset(&node->fusion_internal_tree, 0, sizeof(fusion_node) + sizeof(fusion_b_node*)*(MAX_FUSION_SIZE+1));
+        insert_key_node(&node->fusion_internal_tree, median);
+        // int pos = ~query_branch_node(&node->fusion_internal_tree, median);
+        // for(int i=node->fusion_internal_tree.tree.meta.size /*ok that is ridiculous, fix that*/; i >= pos+2; i--) {
+        //     node->children[i] = node->children[i-1];
+        // }
+        node->children[0] = newlefthalf;
+        node->children[1] = newrighthalf;
+        newlefthalf->parent = node;
+        newrighthalf->parent = node;
+        // cout << "node is root" << endl;
+        // printTree(node);
+        return;
+    }
+
+    // cout << "Went up to par" << endl;
+
+    node->deleted = true;
+    insert_key_node(&par->fusion_internal_tree, median);
+    int pos = ~query_branch_node(&par->fusion_internal_tree, median);
+    for(int i=par->fusion_internal_tree.tree.meta.size /*ok that is ridiculous, fix that*/; i >= pos+2; i--) {
+        par->children[i] = par->children[i-1];
+    }
+    par->children[pos] = newlefthalf;
+    par->children[pos+1] = newrighthalf;
+    newlefthalf->parent = par;
+    newrighthalf->parent = par;
+}
+
+void parallel_insert_full_tree(fusion_b_node* root, __m512i key) {
+    //Here we really just don't want the root to be null, cause multiple threads doing stuff and all that
+    assert(root != NULL);
+
+    // cout << "FDFS" << endl;
+    (root->mtx).lock_shared();
+    // cout << "FDFS2" << endl;
+    if(root->deleted) {
+        return parallel_insert_full_tree(root->parent, key);
+    }
+    //The following seems rather sus
+    if(node_full(&root->fusion_internal_tree)) {
+        // cout << "DFSDFSDFD" << endl;
+        (root->mtx).unlock_shared();
+        (root->mtx).lock();
+        fusion_b_node* par = root->parent;
+        if(!node_full(&root->fusion_internal_tree)) {
+            (root->mtx).unlock();
+            return parallel_insert_full_tree(root, key);
+        }
+        //Locking the parent first ENSURES that, when we lock the root, no nodes are gonna be waiting to get the root
+        //EDIT: not really lol but whatever. For now we just ignore this. Maybe add garbage collection, maybe do something less dumb Idk
+        if(par != NULL) {
+            (par->mtx).lock();
+            if(node_full(&par->fusion_internal_tree)) {
+                (root->mtx).unlock();
+                (par->mtx).unlock();
+                return parallel_insert_full_tree(par, key);
+            }
+        }
+        split_node(root, par);
+        (root->mtx).unlock();
+        if(par != NULL) {
+            (par->mtx).unlock();
+        }
+        return parallel_insert_full_tree(par == NULL? root : par, key);
+    }
+
+    int branch = query_branch_node(&root->fusion_internal_tree, key);
+    if(branch < 0) { //say exact match just return & do nothing
+        (root->mtx).unlock_shared();
+        return;
+    }
+    if(root->children[branch] == NULL) {
+        // cout << "FDDCER" << endl;
+        (root->mtx).unlock_shared();
+        // cout << "FFDFERR45" << endl;
+        (root->mtx).lock();
+        // cout << "FFDFERR43335" << endl;
+        if(node_full(&root->fusion_internal_tree) || root->deleted) {
+            // cout << "FDDCER2" << endl;
+            (root->mtx).unlock();
+            return parallel_insert_full_tree(root, key);
+        }
+        // cout << "FDDCER3" << endl;
+        insert_key_node(&root->fusion_internal_tree, key);
+        (root->mtx).unlock();
+        return;
+    }
+    fusion_b_node* child = root->children[branch];
+    (root->mtx).unlock_shared();
+    return parallel_insert_full_tree(child, key);
+}
+
+// __m512i* parallel_successor(fusion_b_node* root, __m512i key, bool foundkey /*=false*/, bool needbig/*=false*/) { //returns null if there is no successor
+// 	if(root == NULL) return NULL;
+//     (root->mtx).shared_lock();
+//     if(root->deleted) {
+//         return parallel_successor(root->parent, key, ) // ????????
+//     }
+// 	if(foundkey) {
+// 		//cout << "Found key" << endl;
+// 		int branch = needbig ? root->fusion_internal_tree.tree.meta.size : 0;
+// 		__m512i* ans = successor(root->children[branch], key, true, needbig);
+// 		branch = needbig ? (root->fusion_internal_tree.tree.meta.size-1) : 0;
+// 		return ans == NULL ? &root->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&root->fusion_internal_tree, branch)] : ans;
+// 	}
+//     int branch = query_branch_node(&root->fusion_internal_tree, key);
+//     //print_keys_sig_bits(&root->fusion_internal_tree);
+//     //cout << "Branch is " << branch << ", and is it null: " << (root->children[branch < 0 ? 0 : branch] == NULL) << endl;
+//     if(branch < 0) { // exact key match found
+//         branch = ~branch;
+//         if(root->children[branch+1] != NULL) { //This was root->children[branch] before, but that caused no problems for some reason? wtf? Oh, maybe cause its a B-tree that just never really happens. Yeah I think if there's just one child then that's enough
+// 	        return successor(root->children[branch+1], key, true, false);
+// 	    }
+// 	    else if(branch+1 < root->fusion_internal_tree.tree.meta.size) {
+// 	    	return &root->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&root->fusion_internal_tree, branch+1)];
+// 	   	}
+// 	    return NULL;
+//     }
+//     __m512i* ans;
+//     if(root->children[branch] == NULL || (ans = successor(root->children[branch], key)) == NULL){ //when didn't find the successor below, we now look if the successor is here
+//     	if(branch < root->fusion_internal_tree.tree.meta.size) {
+//     		return &root->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&root->fusion_internal_tree, branch)];
+//     	}
+//     	else return NULL;
+//     }
+//     return ans;
+// }
