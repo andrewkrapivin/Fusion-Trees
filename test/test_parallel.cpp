@@ -14,11 +14,11 @@
 #include <shared_mutex>
 #include <thread>
 
-#include "SimpleAlloc.h"
-#include "fusion_tree.h"
-#include "HelperFuncs.h"
-#include "FusionBTree.h"
-#include "FusionQSort.h"
+#include "../src/SimpleAlloc.h"
+#include "../src/fusion_tree.h"
+#include "../src/HelperFuncs.h"
+#include "../src/FusionBTree.h"
+#include "../src/FusionQSort.h"
 
 uint64_t gen_random_uint64(mt19937& generator) {
     uint64_t A;
@@ -104,10 +104,10 @@ void parallel_insert_items(fusion_b_node* root, __m512i items[], size_t num) {
 
 int main() {
     unsigned seed = chrono::steady_clock::now().time_since_epoch().count();
-    mt19937 generator (86831875);
+    mt19937 generator (2);
     fusion_b_node* root = new fusion_b_node();
 
-    constexpr size_t bigtestsize = 150;
+    constexpr size_t bigtestsize = 20;
     constexpr size_t numThreads = 2;
     __m512i* big_randomlist = static_cast<__m512i*>(std::aligned_alloc(64, bigtestsize*64));
     for(int i=0; i < bigtestsize; i++) {

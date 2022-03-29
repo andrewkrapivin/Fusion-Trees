@@ -11,11 +11,11 @@
 #include <set>
 #include <cassert>
 
-#include "SimpleAlloc.h"
-#include "fusion_tree.h"
-#include "HelperFuncs.h"
-#include "FusionBTree.h"
-#include "FusionQSort.h"
+#include "../src/SimpleAlloc.h"
+#include "../src/fusion_tree.h"
+#include "../src/HelperFuncs.h"
+#include "../src/FusionBTree.h"
+#include "../src/FusionQSort.h"
 
 uint64_t gen_random_uint64(mt19937& generator) {
     uint64_t A;

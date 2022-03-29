@@ -293,8 +293,10 @@ static void split_node(fusion_b_node* node, fusion_b_node* par) {
     fusion_node* key_fnode = &node->fusion_internal_tree;
 
     fusion_b_node* newlefthalf = new fusion_b_node();
+    // newlefthalf->id = ++IDCounter;
     // newlefthalf->id = ++IDCounter; //not thread safe but this is just for debugging anyways
     fusion_b_node* newrighthalf = new fusion_b_node();
+    // newrighthalf->id = ++IDCounter;
     // newrighthalf->id = ++IDCounter; //not thread safe but this is just for debugging anyways
 
     constexpr int medpos = MAX_FUSION_SIZE/2; //two choices since max size even: maybe randomize?
@@ -302,8 +304,8 @@ static void split_node(fusion_b_node* node, fusion_b_node* par) {
     for(int i = 0; i < medpos; i++) {
         insert(&newlefthalf->fusion_internal_tree, get_key_from_sorted_pos(&node->fusion_internal_tree, i));
         newlefthalf->children[i] = node->children[i];
-        if (node->children[i] != NULL)
-            node->children[i]->parent = newlefthalf;
+        // if (node->children[i] != NULL)
+        //     node->children[i]->parent = newlefthalf;
     }
     // cout << "SDFSDFSDF" << endl;
     newlefthalf->children[medpos] = node->children[medpos];
@@ -312,12 +314,12 @@ static void split_node(fusion_b_node* node, fusion_b_node* par) {
     for(int i = medpos+1; i < MAX_FUSION_SIZE; i++) {
         insert(&newrighthalf->fusion_internal_tree, get_key_from_sorted_pos(&node->fusion_internal_tree, i));
         newrighthalf->children[i-medpos-1] = node->children[i];
-        if (node->children[i] != NULL)
-            node->children[i]->parent = newrighthalf;
+        // if (node->children[i] != NULL)
+        //     node->children[i]->parent = newrighthalf;
     }
     newrighthalf->children[MAX_FUSION_SIZE-medpos-1] = node->children[MAX_FUSION_SIZE];
-    if (node->children[MAX_FUSION_SIZE] != NULL)
-        node->children[MAX_FUSION_SIZE]->parent = newrighthalf;
+    // if (node->children[MAX_FUSION_SIZE] != NULL)
+    //     node->children[MAX_FUSION_SIZE]->parent = newrighthalf;
 
     if(node->fusion_internal_tree.tree.meta.fast) {
         make_fast(&newlefthalf->fusion_internal_tree);
@@ -337,8 +339,8 @@ static void split_node(fusion_b_node* node, fusion_b_node* par) {
         // }
         node->children[0] = newlefthalf;
         node->children[1] = newrighthalf;
-        newlefthalf->parent = node;
-        newrighthalf->parent = node;
+        // newlefthalf->parent = node;
+        // newrighthalf->parent = node;
         // cout << "node is root" << endl;
         // printTree(node);
         return;
@@ -354,73 +356,292 @@ static void split_node(fusion_b_node* node, fusion_b_node* par) {
     }
     par->children[pos] = newlefthalf;
     par->children[pos+1] = newrighthalf;
-    newlefthalf->parent = par;
-    newrighthalf->parent = par;
+    // newlefthalf->parent = par;
+    // newrighthalf->parent = par;
 }
 
 void parallel_insert_full_tree(fusion_b_node* root, __m512i key) {
     //Here we really just don't want the root to be null, cause multiple threads doing stuff and all that
     assert(root != NULL);
 
-    // cout << "FDFS" << endl;
-    (root->mtx).lock_shared();
-    // cout << "FDFS2" << endl;
-    if(root->deleted) {
-        return parallel_insert_full_tree(root->parent, key);
-    }
-    //The following seems rather sus
-    if(node_full(&root->fusion_internal_tree)) {
-        // cout << "DFSDFSDFD" << endl;
-        (root->mtx).unlock_shared();
-        (root->mtx).lock();
-        fusion_b_node* par = root->parent;
-        if(!node_full(&root->fusion_internal_tree)) {
-            (root->mtx).unlock();
-            return parallel_insert_full_tree(root, key);
-        }
-        //Locking the parent first ENSURES that, when we lock the root, no nodes are gonna be waiting to get the root
-        //EDIT: not really lol but whatever. For now we just ignore this. Maybe add garbage collection, maybe do something less dumb Idk
-        if(par != NULL) {
-            (par->mtx).lock();
-            if(node_full(&par->fusion_internal_tree)) {
-                (root->mtx).unlock();
-                (par->mtx).unlock();
-                return parallel_insert_full_tree(par, key);
-            }
-        }
-        split_node(root, par);
-        (root->mtx).unlock();
-        if(par != NULL) {
-            (par->mtx).unlock();
-        }
-        return parallel_insert_full_tree(par == NULL? root : par, key);
-    }
+    // printTree(root);
 
-    int branch = query_branch_node(&root->fusion_internal_tree, key);
+    fusion_b_node* par = NULL;
+    fusion_b_node* cur = root;
+    //REALLY need to do upgradable mutexes, cause this is unweildy, although even upgradable mutexes doesn't really solve all of our problems, but it does solve some.
+    //NEW PLAN: "root" is actually a dummy root-->>it stores absolutely nothing except a mutex, so that we ALWAYS have two mutexes active.
+    //When want to "upgrade" our mutexes, do it as so: unlock_shared the child, then lock the child, then unlock_shared the parent and lock the parent. NVM THIS IS DEADLOCK
+    //Instead: have a third parameter, which is the pointer of the parent of the thing that we want to EXCLUSIVELY LOCK. Then we, upon having issues (if child node, we claim lock, and then if after locked its full we do as usual and just rerun)
+    //rerun the function the function specifying the third parameter where to lock.
+    (cur->mtx).lock_shared();
+
+    if(node_full(&cur->fusion_internal_tree)) {
+        if((cur->mtx).try_upgrade()) {
+            split_node(cur, par);
+            (cur->mtx).unlock();
+        }
+        else {
+            (cur->mtx).unlock_shared();
+        }
+        return parallel_insert_full_tree(root, key);
+    }
+    int branch = query_branch_node(&cur->fusion_internal_tree, key);
     if(branch < 0) { //say exact match just return & do nothing
-        (root->mtx).unlock_shared();
+        (cur->mtx).unlock_shared();
         return;
     }
-    if(root->children[branch] == NULL) {
-        // cout << "FDDCER" << endl;
-        (root->mtx).unlock_shared();
-        // cout << "FFDFERR45" << endl;
-        (root->mtx).lock();
-        // cout << "FFDFERR43335" << endl;
-        if(node_full(&root->fusion_internal_tree) || root->deleted) {
-            // cout << "FDDCER2" << endl;
-            (root->mtx).unlock();
+    if(cur->children[branch] == NULL) {
+        if((cur->mtx).try_upgrade()) {
+            if(node_full(&cur->fusion_internal_tree)) {
+                split_node(cur, par);
+                (cur->mtx).unlock();
+                return parallel_insert_full_tree(root, key);
+            }
+            insert_key_node(&cur->fusion_internal_tree, key);
+            (cur->mtx).unlock();
+            return;
+        }
+        (cur->mtx).unlock_shared();
+        return parallel_insert_full_tree(root, key);
+    }
+    par = cur;
+    cur = cur->children[branch];
+    (cur->mtx).lock_shared();
+    // cout << "LOCK NODE: " << lock_node << endl;
+    while(true) { //assumes par and cur exist and are locked according to the paradigm.
+        if(node_full(&cur->fusion_internal_tree)) {
+            if(!(par->mtx).try_upgrade()) {
+                (cur->mtx).unlock_shared();
+                return parallel_insert_full_tree(root, key);
+            }
+            (cur->mtx).upgrade();
+            split_node(cur, par);
+            (par->mtx).unlock();
+            (cur->mtx).unlock();
             return parallel_insert_full_tree(root, key);
         }
-        // cout << "FDDCER3" << endl;
-        insert_key_node(&root->fusion_internal_tree, key);
-        (root->mtx).unlock();
-        return;
+        int branch = query_branch_node(&cur->fusion_internal_tree, key);
+        // cout << "branch, " << branch << endl;
+        // cout << (cur->children[branch] == cur) << endl;
+        if(branch < 0) { //say exact match just return & do nothing
+            (par->mtx).unlock_shared();
+            (cur->mtx).unlock_shared();
+            return;
+        }
+        if(cur->children[branch] == NULL) {
+            (cur->mtx).upgrade();
+            insert_key_node(&cur->fusion_internal_tree, key);
+            (par->mtx).unlock_shared();
+            (cur->mtx).unlock();
+            return;
+        }
+        fusion_b_node* nchild = cur->children[branch];
+        (nchild->mtx).lock_shared();
+        (par->mtx).unlock_shared();
+        par = cur;
+        cur = nchild;
     }
-    fusion_b_node* child = root->children[branch];
-    (root->mtx).unlock_shared();
-    return parallel_insert_full_tree(child, key);
 }
+
+// void parallel_insert_full_tree(fusion_b_node* root, __m512i key, fusion_b_node* lock_node /* = NULL*/) {
+//     //Here we really just don't want the root to be null, cause multiple threads doing stuff and all that
+//     assert(root != NULL);
+
+//     // printTree(root);
+
+//     fusion_b_node* par = NULL;
+//     fusion_b_node* cur = root;
+//     //REALLY need to do upgradable mutexes, cause this is unweildy, although even upgradable mutexes doesn't really solve all of our problems, but it does solve some.
+//     //NEW PLAN: "root" is actually a dummy root-->>it stores absolutely nothing except a mutex, so that we ALWAYS have two mutexes active.
+//     //When want to "upgrade" our mutexes, do it as so: unlock_shared the child, then lock the child, then unlock_shared the parent and lock the parent. NVM THIS IS DEADLOCK
+//     //Instead: have a third parameter, which is the pointer of the parent of the thing that we want to EXCLUSIVELY LOCK. Then we, upon having issues (if child node, we claim lock, and then if after locked its full we do as usual and just rerun)
+//     //rerun the function the function specifying the third parameter where to lock.
+//     if(lock_node == cur) {
+//         // cout << "NANI THE F" << endl;
+//         // (cur->mtx).unlock_shared();
+//         (cur->mtx).lock();
+//         // cout << "NANI THE F2" << endl;
+//     }
+//     else {
+//         (cur->mtx).lock_shared();
+//     }
+//     if(node_full(&cur->fusion_internal_tree)) {
+//         if(lock_node != cur) {
+//             (cur->mtx).unlock_shared();
+//             (cur->mtx).lock();
+//         }
+//         //note that the root NEVER gets deleted, so we just check if it was split
+//         if(node_full(&cur->fusion_internal_tree)) {
+//             split_node(cur, par);
+//         }
+//         (cur->mtx).unlock();
+//         return parallel_insert_full_tree(root, key);
+//     }
+//     int branch = query_branch_node(&cur->fusion_internal_tree, key);
+//     if(branch < 0) { //say exact match just return & do nothing
+//         if(lock_node == cur) {
+//             (cur->mtx).unlock();
+//         }
+//         else {
+//             (cur->mtx).unlock_shared();
+//         }
+//         return;
+//     }
+//     if(cur->children[branch] == NULL) {
+//         if(lock_node != cur) {
+//             (cur->mtx).unlock_shared();
+//             (cur->mtx).lock();
+//         }
+//         if(cur->deleted || cur->children[branch] != NULL) {
+//             (cur->mtx).unlock();
+//             return parallel_insert_full_tree(root, key);
+//         }
+//         if(node_full(&cur->fusion_internal_tree)) {
+//             split_node(cur, par);
+//             (cur->mtx).unlock();
+//             return parallel_insert_full_tree(root, key);
+//         }
+//         insert_key_node(&cur->fusion_internal_tree, key);
+//         (cur->mtx).unlock();
+//         return;
+//     }
+//     par = cur;
+//     cur = cur->children[branch];
+//     if(lock_node == par || lock_node == cur) {
+//         (cur->mtx).lock();
+//     }
+//     else {
+//         (cur->mtx).lock_shared();
+//     }
+//     // cout << "LOCK NODE: " << lock_node << endl;
+//     while(true) { //assumes par and cur exist and are locked according to the paradigm.
+//         if(par == lock_node) {
+//             // cout << "FDSFDS" << endl;
+//             if(node_full(&cur->fusion_internal_tree)) {
+//                 split_node(cur, par);
+//             }
+//             (par->mtx).unlock();
+//             (cur->mtx).unlock();
+//             return parallel_insert_full_tree(root, key);
+//         }
+//         if(node_full(&cur->fusion_internal_tree)) {
+//             if(cur == lock_node) {
+//                 (cur->mtx).unlock();
+//             }
+//             else {
+//                 (cur->mtx).unlock_shared();
+//             }
+//             (par->mtx).unlock_shared();
+//             return parallel_insert_full_tree(root, key, par);
+//         }
+//         int branch = query_branch_node(&cur->fusion_internal_tree, key);
+//         // cout << "branch, " << branch << endl;
+//         // cout << (cur->children[branch] == cur) << endl;
+//         if(branch < 0) { //say exact match just return & do nothing
+//             (par->mtx).unlock_shared();
+//             if(cur == lock_node)
+//                 (cur->mtx).unlock();
+//             else
+//                 (cur->mtx).unlock_shared();
+//             return;
+//         }
+//         if(cur->children[branch] == NULL) {
+//             // cout << "fdafasdfas " << (cur == lock_node) << endl;
+//             (cur->mtx).unlock_shared();
+//             // cout << "NANDE???" << endl;
+//             (cur->mtx).lock();
+//             // cout <<" DFSDFSD " << endl;
+//             if(cur->deleted || cur->children[branch] != NULL) {
+//                 (par->mtx).unlock_shared();
+//                 (cur->mtx).unlock();
+//                 return parallel_insert_full_tree(root, key);
+//             }
+//             if(node_full(&cur->fusion_internal_tree)) {
+//                 (cur->mtx).unlock();
+//                 (par->mtx).unlock_shared();
+//                 return parallel_insert_full_tree(root, key, par);
+//             }
+//             insert_key_node(&cur->fusion_internal_tree, key);
+//             (par->mtx).unlock_shared();
+//             (cur->mtx).unlock();
+//             return;
+//         }
+//         fusion_b_node* nchild = cur->children[branch];
+//         // cout << cur << " " << cur->children[branch] << endl;
+//         // cout << (nchild == cur) << endl;
+//         if(cur == lock_node || nchild == lock_node) {
+//             (nchild->mtx).lock();
+//         }
+//         else {
+//             (nchild->mtx).lock_shared();
+//         }
+//         (par->mtx).unlock_shared();
+//         par = cur;
+//         cur = nchild;
+//         //Actually since we have three nodes locked at once, it should be possible to not have to like rerun the function and stuff, way its done rn is p bad
+//         //But whatever as a first iteration hopefully it works
+//         //Actually maybe that doesn't work anyways
+//     }
+
+    // // cout << "FDFS" << endl;
+    // (root->mtx).lock_shared();
+    // // cout << "FDFS2" << endl;
+    // if(root->deleted) {
+    //     return parallel_insert_full_tree(root->parent, key);
+    // }
+    // //The following seems rather sus
+    // if(node_full(&root->fusion_internal_tree)) {
+    //     // cout << "DFSDFSDFD" << endl;
+    //     (root->mtx).unlock_shared();
+    //     (root->mtx).lock();
+    //     fusion_b_node* par = root->parent;
+    //     if(!node_full(&root->fusion_internal_tree)) {
+    //         (root->mtx).unlock();
+    //         return parallel_insert_full_tree(root, key);
+    //     }
+    //     //Locking the parent first ENSURES that, when we lock the root, no nodes are gonna be waiting to get the root
+    //     //EDIT: not really lol but whatever. For now we just ignore this. Maybe add garbage collection, maybe do something less dumb Idk
+    //     if(par != NULL) {
+    //         (par->mtx).lock();
+    //         if(node_full(&par->fusion_internal_tree)) {
+    //             (root->mtx).unlock();
+    //             (par->mtx).unlock();
+    //             return parallel_insert_full_tree(par, key);
+    //         }
+    //     }
+    //     split_node(root, par);
+    //     (root->mtx).unlock();
+    //     if(par != NULL) {
+    //         (par->mtx).unlock();
+    //     }
+    //     return parallel_insert_full_tree(par == NULL? root : par, key);
+    // }
+
+    // int branch = query_branch_node(&root->fusion_internal_tree, key);
+    // if(branch < 0) { //say exact match just return & do nothing
+    //     (root->mtx).unlock_shared();
+    //     return;
+    // }
+    // if(root->children[branch] == NULL) {
+    //     // cout << "FDDCER" << endl;
+    //     (root->mtx).unlock_shared();
+    //     // cout << "FFDFERR45" << endl;
+    //     (root->mtx).lock();
+    //     // cout << "FFDFERR43335" << endl;
+    //     if(node_full(&root->fusion_internal_tree) || root->deleted) {
+    //         // cout << "FDDCER2" << endl;
+    //         (root->mtx).unlock();
+    //         return parallel_insert_full_tree(root, key);
+    //     }
+    //     // cout << "FDDCER3" << endl;
+    //     insert_key_node(&root->fusion_internal_tree, key);
+    //     (root->mtx).unlock();
+    //     return;
+    // }
+    // fusion_b_node* child = root->children[branch];
+    // (root->mtx).unlock_shared();
+    // return parallel_insert_full_tree(child, key);
+// }
 
 // __m512i* parallel_successor(fusion_b_node* root, __m512i key, bool foundkey /*=false*/, bool needbig/*=false*/) { //returns null if there is no successor
 // 	if(root == NULL) return NULL;

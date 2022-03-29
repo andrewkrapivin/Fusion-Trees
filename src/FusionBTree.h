@@ -3,8 +3,7 @@
 
 #include "fusion_tree.h"
 #include "SimpleAlloc.h"
-#include <mutex>
-#include <shared_mutex>
+#include "UpgradeableMutex.h"
 #include <thread>
 
 //maybe do like numbranches macro defined as max_fusion_size+1 to make things a bit nicer?
@@ -13,7 +12,7 @@ typedef struct fusion_b_node{
 	fusion_node fusion_internal_tree;
 	fusion_b_node* children[MAX_FUSION_SIZE+1];
     fusion_b_node* parent;
-    std::shared_mutex mtx;
+    UpgradeableMutex mtx;
     //Ok this is REALLY dumb, and I need to come up with a better system for this. Designing with memory leakage in mind lol
     bool deleted;
     //temporary debug vals
