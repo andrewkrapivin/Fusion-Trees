@@ -13,6 +13,7 @@
 #include <mutex>
 #include <shared_mutex>
 #include <thread>
+#include <string>
 
 #include "../src/SimpleAlloc.h"
 #include "../src/fusion_tree.h"
@@ -94,21 +95,45 @@ void print_node_info(fusion_node& test_node) {
     print_vec(test_node.key_positions, true, 8);
 }
 
-void parallel_insert_items(fusion_b_node* root, __m512i items[], size_t num) {
+void parallel_insert_items(fusion_b_node* root, __m512i items[], size_t num, string path) {
+    cout << "path is: " << path << endl;
+    ofstream fout(path);
     for(size_t i = 0; i < num; i++) {
         // printTree(root);
         // cout << "Inserting element " << i << endl;
-        parallel_insert_full_tree(root, items[i]);
+        parallel_insert_full_tree(root, items[i], fout);
     }
+    fout.close();
 }
 
-int main() {
+int main(int argc, char** argv) {
     unsigned seed = chrono::steady_clock::now().time_since_epoch().count();
     mt19937 generator (2);
     fusion_b_node* root = new fusion_b_node();
 
-    constexpr size_t bigtestsize = 20;
-    constexpr size_t numThreads = 2;
+    size_t bigtestsize = 30;
+    if(argc >= 2)
+        bigtestsize = atoi(argv[1]);
+    size_t numThreads = 1;
+    if(argc >= 3)
+        numThreads = atoi(argv[2]);
+    if(argc < 3+numThreads) {
+        exit(1);
+    }
+    // vector<ofstream> actual_files(argc >= 3+numThreads ? numThreads : 0);
+    // vector<ostream> files(numThreads);
+    // if(argc >= 3+numThreads) {
+    //     for(int i=0; i = numThreads; i++) {
+    //         actual_files[i].open(argv[3+i]);
+    //         ostream f(&actual_files[i]);
+    //         files[i] = f;
+    //     }
+    // }
+    // else {
+    //     for(int i=1; i <= numThreads; i++) {
+    //         files[i].open(&cout);
+    //     }
+    // }
     __m512i* big_randomlist = static_cast<__m512i*>(std::aligned_alloc(64, bigtestsize*64));
     for(int i=0; i < bigtestsize; i++) {
     	big_randomlist[i] = gen_random_vec(generator);
@@ -123,7 +148,7 @@ int main() {
     //Figure out how to test this
     std::vector<std::thread> threads;
     for(size_t i = 0; i < numThreads; i++) {
-        threads.push_back(std::thread(parallel_insert_items, root, big_randomlist+indices[i], indices[i+1]-indices[i]));
+        threads.push_back(std::thread(parallel_insert_items, root, big_randomlist+indices[i], indices[i+1]-indices[i], argv[3+i]));
     }
 
     for(auto& th: threads) {

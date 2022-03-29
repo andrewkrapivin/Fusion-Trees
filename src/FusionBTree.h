@@ -5,6 +5,8 @@
 #include "SimpleAlloc.h"
 #include "UpgradeableMutex.h"
 #include <thread>
+#include <fstream>
+#include <ostream>
 
 //maybe do like numbranches macro defined as max_fusion_size+1 to make things a bit nicer?
 
@@ -20,7 +22,7 @@ typedef struct fusion_b_node{
     uint64_t id;
 } fusion_b_node;
 
-void parallel_insert_full_tree(fusion_b_node* root, __m512i key);
+void parallel_insert_full_tree(fusion_b_node* root, __m512i key, ostream& fout);
 __m512i* parallel_successor(fusion_b_node* root, __m512i key, bool foundkey=false, bool needbig=false);
 __m512i* parallel_predecessor(fusion_b_node* root, __m512i key, bool foundkey=false, bool needbig=false);
 

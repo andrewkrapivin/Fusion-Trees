@@ -1,6 +1,5 @@
 CXX = g++
-CXXFLAGS = -MMD -march=icelake-client -std=c++17 -O3
-CXXFLAGSPARALLEL = -pthread -MMD -march=icelake-client -std=c++17
+CXXFLAGS = -pthread -MMD -march=icelake-client -std=c++17 -O3
  
 SRCDIR = src
 OBJDIR = bin
@@ -41,7 +40,7 @@ test/test.o: test/test.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 test/test_parallel.o: test/test_parallel.cpp
-	$(CXX) $(CXXFLAGSPARALLEL) -c $< -o $@
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
