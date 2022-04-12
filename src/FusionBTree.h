@@ -4,6 +4,7 @@
 #include "fusion_tree.h"
 #include "SimpleAlloc.h"
 #include "UpgradeableMutex.h"
+#include "lock.h"
 #include <thread>
 #include <fstream>
 #include <ostream>
@@ -14,7 +15,8 @@ typedef struct fusion_b_node{
 	fusion_node fusion_internal_tree;
 	fusion_b_node* children[MAX_FUSION_SIZE+1];
     fusion_b_node* parent;
-    UpgradeableMutex mtx;
+    // UpgradeableMutex mtx;
+    ReaderWriterLock mtx;
     //Ok this is REALLY dumb, and I need to come up with a better system for this. Designing with memory leakage in mind lol
     bool deleted;
     //temporary debug vals
@@ -22,6 +24,7 @@ typedef struct fusion_b_node{
     uint64_t id;
 } fusion_b_node;
 
+void parallel_insert_full_tree_DLock(fusion_b_node* root, __m512i key, ostream& fout, uint8_t thread_id);
 void parallel_insert_full_tree(fusion_b_node* root, __m512i key, ostream& fout);
 __m512i* parallel_successor(fusion_b_node* root, __m512i key, bool foundkey=false, bool needbig=false);
 __m512i* parallel_predecessor(fusion_b_node* root, __m512i key, bool foundkey=false, bool needbig=false);

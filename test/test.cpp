@@ -320,89 +320,89 @@ int main(){
     auto duration = chrono::duration_cast<chrono::microseconds>(end-start);
     cout << "Time to insert: " << duration.count() << endl;
     
-    // start = chrono::high_resolution_clock::now();
-    // for(int i=0; i < bigtestsize; i++) {
-    // 	list_set.insert(small_randomlist[i]);
-    // }
-    // end = chrono::high_resolution_clock::now();
-    // duration = chrono::duration_cast<chrono::microseconds>(end-start);
-    // cout << "Time to insert 64 bit ints to std::set: " << duration.count() << endl;
+    start = chrono::high_resolution_clock::now();
+    for(int i=0; i < bigtestsize; i++) {
+    	list_set.insert(small_randomlist[i]);
+    }
+    end = chrono::high_resolution_clock::now();
+    duration = chrono::duration_cast<chrono::microseconds>(end-start);
+    cout << "Time to insert 64 bit ints to std::set: " << duration.count() << endl;
 
-    // start = chrono::high_resolution_clock::now();
-    // for(int i=0; i < bigtestsize; i++) {
-    // 	boost_set.insert(small_randomlist[i]);
-    // }
-    // end = chrono::high_resolution_clock::now();
-    // duration = chrono::duration_cast<chrono::microseconds>(end-start);
-    // cout << "Time to insert 64 bit ints to boost::container::set: " << duration.count() << endl;
+    start = chrono::high_resolution_clock::now();
+    for(int i=0; i < bigtestsize; i++) {
+    	boost_set.insert(small_randomlist[i]);
+    }
+    end = chrono::high_resolution_clock::now();
+    duration = chrono::duration_cast<chrono::microseconds>(end-start);
+    cout << "Time to insert 64 bit ints to boost::container::set: " << duration.count() << endl;
 
     __m512i* prev2;
     uint64_t cNull = 0;
     start = chrono::high_resolution_clock::now();
-    for(int j=0; j < 100; j++){
+    // for(int j=0; j < 100; j++){
         for(int i=0; i < bigtestsize; i++) {
             prev2 = successor(root, big_randomlist[i]);
             if(prev2 == NULL) cNull++;
             //assert(first_diff_bit_pos(prev2, big_randomlist[i]) == -1);
         }
-    }
+    // }
     // assert(cNull == 1);
     end = chrono::high_resolution_clock::now();
     duration = chrono::duration_cast<chrono::microseconds>(end-start);
     cout << "Time to query nodes in random order: " << duration.count() << endl;
 
-    // start = chrono::high_resolution_clock::now();
-    // sort(big_randomlist, big_randomlist+bigtestsize, fast_compare__m512i);
-    // end = chrono::high_resolution_clock::now();
-    // duration = chrono::duration_cast<chrono::microseconds>(end-start);
-    // cout << "Time to sort with std::sort: " << duration.count() << endl;
-
-    // // for(size_t i = 0; i < bigtestsize; i++) {
-    // //     print_binary_uint64_big_endian(big_randomlist[i][7], true, 64, 16);
-    // // }
+    start = chrono::high_resolution_clock::now();
+    sort(big_randomlist, big_randomlist+bigtestsize, fast_compare__m512i);
+    end = chrono::high_resolution_clock::now();
+    duration = chrono::duration_cast<chrono::microseconds>(end-start);
+    cout << "Time to sort with std::sort: " << duration.count() << endl;
 
     // for(size_t i = 0; i < bigtestsize; i++) {
-    //     std::uniform_int_distribution<uint64_t> temporary_distribution(0, bigtestsize-1);
-    //     size_t j = temporary_distribution(generator);
-    //     swap(big_randomlist[i], big_randomlist[j]);
+    //     print_binary_uint64_big_endian(big_randomlist[i][7], true, 64, 16);
     // }
 
-    // start = chrono::high_resolution_clock::now();
-    // FusionQSort(big_randomlist, bigtestsize);
-    // end = chrono::high_resolution_clock::now();
-    // duration = chrono::duration_cast<chrono::microseconds>(end-start);
-    // cout << "Time to sort with FusionQSort: " << duration.count() << endl;
+    for(size_t i = 0; i < bigtestsize; i++) {
+        std::uniform_int_distribution<uint64_t> temporary_distribution(0, bigtestsize-1);
+        size_t j = temporary_distribution(generator);
+        swap(big_randomlist[i], big_randomlist[j]);
+    }
 
-    // for(size_t i = 0; i < bigtestsize-1; i++) {
-    //     assert(first_diff_bit_pos(big_randomlist[i+1], big_randomlist[i]) != -1);
-    //     // assert(compare__m512i(big_randomlist[i], big_randomlist[i+1]) == fast_compare__m512i(big_randomlist[i], big_randomlist[i+1]));
-    //     if(!compare__m512i(big_randomlist[i], big_randomlist[i+1])) {
-    //         cout << "Failed at " << i << endl;
-    //         exit(1);
-    //     }
+    start = chrono::high_resolution_clock::now();
+    FusionQSort(big_randomlist, bigtestsize);
+    end = chrono::high_resolution_clock::now();
+    duration = chrono::duration_cast<chrono::microseconds>(end-start);
+    cout << "Time to sort with FusionQSort: " << duration.count() << endl;
+
+    for(size_t i = 0; i < bigtestsize-1; i++) {
+        assert(first_diff_bit_pos(big_randomlist[i+1], big_randomlist[i]) != -1);
+        // assert(compare__m512i(big_randomlist[i], big_randomlist[i+1]) == fast_compare__m512i(big_randomlist[i], big_randomlist[i+1]));
+        if(!compare__m512i(big_randomlist[i], big_randomlist[i+1])) {
+            cout << "Failed at " << i << endl;
+            exit(1);
+        }
+    }
+
+    // for(size_t i = 0; i < bigtestsize; i++) {
+    //     print_binary_uint64_big_endian(big_randomlist[i][7], true, 64, 16);
     // }
-
-    // // for(size_t i = 0; i < bigtestsize; i++) {
-    // //     print_binary_uint64_big_endian(big_randomlist[i][7], true, 64, 16);
-    // // }
     
-    // /*start = chrono::high_resolution_clock::now();
-    // for(int i=0; i < bigtestsize; i++) {
-    // 	root = insert_full_tree(root, big_randomlist[i]);
-    // }
-    // end = chrono::high_resolution_clock::now();
-    // duration = chrono::duration_cast<chrono::microseconds>(end-start);
-    // cout << "Time to insert: " << duration.count() << endl;*/
+    /*start = chrono::high_resolution_clock::now();
+    for(int i=0; i < bigtestsize; i++) {
+    	root = insert_full_tree(root, big_randomlist[i]);
+    }
+    end = chrono::high_resolution_clock::now();
+    duration = chrono::duration_cast<chrono::microseconds>(end-start);
+    cout << "Time to insert: " << duration.count() << endl;*/
     
-    // __m512i prev = {0};
-    // start = chrono::high_resolution_clock::now();
-    // for(int i=0; i < bigtestsize; i++) {
-    // 	prev = *successor(root, prev);
-    // 	//assert(first_diff_bit_pos(prev, big_randomlist[i]) == -1);
-    // }
-    // end = chrono::high_resolution_clock::now();
-    // duration = chrono::duration_cast<chrono::microseconds>(end-start);
-    // cout << "Time to retrieve sorted list with fusion tree: " << duration.count() << endl;
+    __m512i prev = {0};
+    start = chrono::high_resolution_clock::now();
+    for(int i=0; i < bigtestsize; i++) {
+    	prev = *successor(root, prev);
+    	//assert(first_diff_bit_pos(prev, big_randomlist[i]) == -1);
+    }
+    end = chrono::high_resolution_clock::now();
+    duration = chrono::duration_cast<chrono::microseconds>(end-start);
+    cout << "Time to retrieve sorted list with fusion tree: " << duration.count() << endl;
 
     // long long count = 0;
     // start = chrono::high_resolution_clock::now();
@@ -432,34 +432,34 @@ int main(){
     // duration = chrono::duration_cast<chrono::microseconds>(end-start);
     // cout << "Time to query fast2: " << duration.count() << " FDFSDF " << count << endl;
 
-    // /*uint64_t prev = 0;
-    // start = chrono::high_resolution_clock::now();
-    // for(int i=0; i < bigtestsize; i++) {
-    // 	//prev = *list_set
-    // }
-    // end = chrono::high_resolution_clock::now();
-    // duration = chrono::duration_cast<chrono::microseconds>(end-start);
-    // cout << "Time to retrieve sorted list with fusion tree: " << duration.count() << endl;*/
-    // //sort(big_randomlist, big_randomlist+bigtestsize, compare__m512i);
-    // /*for(int i=0; i < bigtestsize; i++) {
-    // 	root = insert_full_tree(root, big_randomlist[i]);
-    // }*/
-    // for(int i=0; i < bigtestsize-1; i++) {
-    // 	//cout << "Searching ";
-    // 	//print_binary_uint64_big_endian(big_randomlist[i][7], true, 64, 8);
-    // 	__m512i* treesucc = successor(root, big_randomlist[i]);
-    // 	if(treesucc == NULL){
-    // 		cout << "treesuc is NULL" << endl;
-    //         break;
-    // 	}
-    // 	else {
-    // 		if(first_diff_bit_pos(*treesucc, big_randomlist[i+1]) != -1) {
-    // 			cout << "Wrong at " << i << endl;
-    // 			print_binary_uint64_big_endian((*treesucc)[7], true, 64, 8);
-    // 			break;
-	// 	    }
-    // 	}
-    // }
+    /*uint64_t prev = 0;
+    start = chrono::high_resolution_clock::now();
+    for(int i=0; i < bigtestsize; i++) {
+    	//prev = *list_set
+    }
+    end = chrono::high_resolution_clock::now();
+    duration = chrono::duration_cast<chrono::microseconds>(end-start);
+    cout << "Time to retrieve sorted list with fusion tree: " << duration.count() << endl;*/
+    //sort(big_randomlist, big_randomlist+bigtestsize, compare__m512i);
+    /*for(int i=0; i < bigtestsize; i++) {
+    	root = insert_full_tree(root, big_randomlist[i]);
+    }*/
+    for(int i=0; i < bigtestsize-1; i++) {
+    	//cout << "Searching ";
+    	//print_binary_uint64_big_endian(big_randomlist[i][7], true, 64, 8);
+    	__m512i* treesucc = successor(root, big_randomlist[i]);
+    	if(treesucc == NULL){
+    		cout << "treesuc is NULL" << endl;
+            break;
+    	}
+    	else {
+    		if(first_diff_bit_pos(*treesucc, big_randomlist[i+1]) != -1) {
+    			cout << "Wrong at " << i << endl;
+    			print_binary_uint64_big_endian((*treesucc)[7], true, 64, 8);
+    			break;
+		    }
+    	}
+    }
 
     // for(int i=bigtestsize-1; i > 0 ; i--) {
     // 	//cout << "Searching ";

@@ -95,13 +95,13 @@ void print_node_info(fusion_node& test_node) {
     print_vec(test_node.key_positions, true, 8);
 }
 
-void parallel_insert_items(fusion_b_node* root, __m512i items[], size_t num, string path) {
+void parallel_insert_items(fusion_b_node* root, __m512i items[], size_t num, string path, uint8_t id) {
     cout << "path is: " << path << endl;
     ofstream fout(path);
     for(size_t i = 0; i < num; i++) {
         // printTree(root);
         // cout << "Inserting element " << i << endl;
-        parallel_insert_full_tree(root, items[i], fout);
+        parallel_insert_full_tree_DLock(root, items[i], fout, id);
     }
     fout.close();
 }
@@ -110,6 +110,7 @@ int main(int argc, char** argv) {
     unsigned seed = chrono::steady_clock::now().time_since_epoch().count();
     mt19937 generator (2);
     fusion_b_node* root = new fusion_b_node();
+    rw_lock_init(&root->mtx);
 
     size_t bigtestsize = 30;
     if(argc >= 2)
@@ -148,7 +149,8 @@ int main(int argc, char** argv) {
     //Figure out how to test this
     std::vector<std::thread> threads;
     for(size_t i = 0; i < numThreads; i++) {
-        threads.push_back(std::thread(parallel_insert_items, root, big_randomlist+indices[i], indices[i+1]-indices[i], argv[3+i]));
+        // threads.push_back(std::thread(parallel_insert_items, root, big_randomlist+indices[i], indices[i+1]-indices[i], argv[3+i]));
+        threads.push_back(std::thread(parallel_insert_items, root, big_randomlist+indices[i], indices[i+1]-indices[i], argv[3+i], i));
     }
 
     for(auto& th: threads) {
