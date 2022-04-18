@@ -160,69 +160,69 @@ fusion_b_node* insert_full_tree(fusion_b_node* root, __m512i key, SimpleAlloc<fu
     return root;
 }
 
-__m512i* successor(fusion_b_node* root, __m512i key, bool foundkey /*=false*/, bool needbig/*=false*/) { //returns null if there is no successor
-	if(root == NULL) return NULL;
-	if(foundkey) {
-		//cout << "Found key" << endl;
-		int branch = needbig ? root->fusion_internal_tree.tree.meta.size : 0;
-		__m512i* ans = successor(root->children[branch], key, true, needbig);
-		branch = needbig ? (root->fusion_internal_tree.tree.meta.size-1) : 0;
-		return ans == NULL ? &root->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&root->fusion_internal_tree, branch)] : ans;
-	}
-    int branch = query_branch_node(&root->fusion_internal_tree, key);
-    //print_keys_sig_bits(&root->fusion_internal_tree);
-    //cout << "Branch is " << branch << ", and is it null: " << (root->children[branch < 0 ? 0 : branch] == NULL) << endl;
-    if(branch < 0) { // exact key match found
-        branch = ~branch;
-        if(root->children[branch+1] != NULL) { //This was root->children[branch] before, but that caused no problems for some reason? wtf? Oh, maybe cause its a B-tree that just never really happens. Yeah I think if there's just one child then that's enough
-	        return successor(root->children[branch+1], key, true, false);
-	    }
-	    else if(branch+1 < root->fusion_internal_tree.tree.meta.size) {
-	    	return &root->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&root->fusion_internal_tree, branch+1)];
-	   	}
-	    return NULL;
-    }
-    __m512i* ans;
-    if(root->children[branch] == NULL || (ans = successor(root->children[branch], key)) == NULL){ //when didn't find the successor below, we now look if the successor is here
-    	if(branch < root->fusion_internal_tree.tree.meta.size) {
-    		return &root->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&root->fusion_internal_tree, branch)];
-    	}
-    	else return NULL;
-    }
-    return ans;
-}
+// __m512i* successor(fusion_b_node* root, __m512i key, bool foundkey /*=false*/, bool needbig/*=false*/) { //returns null if there is no successor
+// 	if(root == NULL) return NULL;
+// 	if(foundkey) {
+// 		//cout << "Found key" << endl;
+// 		int branch = needbig ? root->fusion_internal_tree.tree.meta.size : 0;
+// 		__m512i* ans = successor(root->children[branch], key, true, needbig);
+// 		branch = needbig ? (root->fusion_internal_tree.tree.meta.size-1) : 0;
+// 		return ans == NULL ? &root->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&root->fusion_internal_tree, branch)] : ans;
+// 	}
+//     int branch = query_branch_node(&root->fusion_internal_tree, key);
+//     //print_keys_sig_bits(&root->fusion_internal_tree);
+//     //cout << "Branch is " << branch << ", and is it null: " << (root->children[branch < 0 ? 0 : branch] == NULL) << endl;
+//     if(branch < 0) { // exact key match found
+//         branch = ~branch;
+//         if(root->children[branch+1] != NULL) { //This was root->children[branch] before, but that caused no problems for some reason? wtf? Oh, maybe cause its a B-tree that just never really happens. Yeah I think if there's just one child then that's enough
+// 	        return successor(root->children[branch+1], key, true, false);
+// 	    }
+// 	    else if(branch+1 < root->fusion_internal_tree.tree.meta.size) {
+// 	    	return &root->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&root->fusion_internal_tree, branch+1)];
+// 	   	}
+// 	    return NULL;
+//     }
+//     __m512i* ans;
+//     if(root->children[branch] == NULL || (ans = successor(root->children[branch], key)) == NULL){ //when didn't find the successor below, we now look if the successor is here
+//     	if(branch < root->fusion_internal_tree.tree.meta.size) {
+//     		return &root->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&root->fusion_internal_tree, branch)];
+//     	}
+//     	else return NULL;
+//     }
+//     return ans;
+// }
 
-__m512i* predecessor(fusion_b_node* root, __m512i key, bool foundkey /*=false*/, bool needbig/*=false*/) { //returns null if there is no successor
-	if(root == NULL) return NULL;
-	if(foundkey) {
-		//cout << "Found key" << endl;
-		int branch = needbig ? root->fusion_internal_tree.tree.meta.size : 0;
-		__m512i* ans = predecessor(root->children[branch], key, true, needbig);
-		branch = needbig ? (root->fusion_internal_tree.tree.meta.size-1) : 0;
-		return ans == NULL ? &root->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&root->fusion_internal_tree, branch)] : ans;
-	}
-    int branch = query_branch_node(&root->fusion_internal_tree, key);
-    //print_keys_sig_bits(&root->fusion_internal_tree);
-    //cout << "Branch is " << branch << ", and is it null: " << (root->children[branch < 0 ? 0 : branch] == NULL) << endl;
-    if(branch < 0) { // exact key match found
-        branch = ~branch;
-        if(root->children[branch] != NULL) {
-	        return predecessor(root->children[branch], key, true, true);
-	    }
-	    else if(branch-1 >= 0) {
-	    	return &root->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&root->fusion_internal_tree, branch-1)];
-	   	}
-	    return NULL;
-    }
-    __m512i* ans;
-    if(root->children[branch] == NULL || (ans = predecessor(root->children[branch], key)) == NULL){ //when didn't find the successor below, we now look if the successor is here
-    	if(branch-1 >= 0) {
-    		return &root->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&root->fusion_internal_tree, branch-1)];
-    	}
-    	else return NULL;
-    }
-    return ans;
-}
+// __m512i* predecessor(fusion_b_node* root, __m512i key, bool foundkey /*=false*/, bool needbig/*=false*/) { //returns null if there is no successor
+// 	if(root == NULL) return NULL;
+// 	if(foundkey) {
+// 		//cout << "Found key" << endl;
+// 		int branch = needbig ? root->fusion_internal_tree.tree.meta.size : 0;
+// 		__m512i* ans = predecessor(root->children[branch], key, true, needbig);
+// 		branch = needbig ? (root->fusion_internal_tree.tree.meta.size-1) : 0;
+// 		return ans == NULL ? &root->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&root->fusion_internal_tree, branch)] : ans;
+// 	}
+//     int branch = query_branch_node(&root->fusion_internal_tree, key);
+//     //print_keys_sig_bits(&root->fusion_internal_tree);
+//     //cout << "Branch is " << branch << ", and is it null: " << (root->children[branch < 0 ? 0 : branch] == NULL) << endl;
+//     if(branch < 0) { // exact key match found
+//         branch = ~branch;
+//         if(root->children[branch] != NULL) {
+// 	        return predecessor(root->children[branch], key, true, true);
+// 	    }
+// 	    else if(branch-1 >= 0) {
+// 	    	return &root->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&root->fusion_internal_tree, branch-1)];
+// 	   	}
+// 	    return NULL;
+//     }
+//     __m512i* ans;
+//     if(root->children[branch] == NULL || (ans = predecessor(root->children[branch], key)) == NULL){ //when didn't find the successor below, we now look if the successor is here
+//     	if(branch-1 >= 0) {
+//     		return &root->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&root->fusion_internal_tree, branch-1)];
+//     	}
+//     	else return NULL;
+//     }
+//     return ans;
+// }
 
 void printTree(fusion_b_node* root, int indent) {
 	if(root->visited) {
@@ -485,8 +485,8 @@ static void split_node_DLock(fusion_b_node* node, fusion_b_node* par, uint8_t th
     }
     // cout << "SDFSDFSDF" << endl;
     newlefthalf->children[medpos] = node->children[medpos];
-    if (node->children[medpos] != NULL)
-        node->children[medpos]->parent = newlefthalf;
+    // if (node->children[medpos] != NULL)
+    //     node->children[medpos]->parent = newlefthalf;
     for(int i = medpos+1; i < MAX_FUSION_SIZE; i++) {
         insert(&newrighthalf->fusion_internal_tree, get_key_from_sorted_pos(&node->fusion_internal_tree, i));
         newrighthalf->children[i-medpos-1] = node->children[i];
@@ -900,36 +900,261 @@ void parallel_insert_full_tree_DLock(fusion_b_node* root, __m512i key, ostream& 
 //     return ans;
 // }
 
-// __m512i* parallel_successor_DLock(fusion_b_node* root, __m512i key, uint8_t thread_id, bool foundkey /*=false*/, bool needbig/*=false*/) { //returns null if there is no successor
-// 	if(root == NULL) return NULL;
-//     (root->mtx).shared_lock();
-//     read_lock(root->mtx, thread_id);
-// 	if(foundkey) {
-// 		//cout << "Found key" << endl;
-// 		int branch = needbig ? root->fusion_internal_tree.tree.meta.size : 0;
-// 		__m512i* ans = successor(root->children[branch], key, true, needbig);
-// 		branch = needbig ? (root->fusion_internal_tree.tree.meta.size-1) : 0;
-// 		return ans == NULL ? &root->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&root->fusion_internal_tree, branch)] : ans;
-// 	}
-//     int branch = query_branch_node(&root->fusion_internal_tree, key);
-//     //print_keys_sig_bits(&root->fusion_internal_tree);
-//     //cout << "Branch is " << branch << ", and is it null: " << (root->children[branch < 0 ? 0 : branch] == NULL) << endl;
-//     if(branch < 0) { // exact key match found
-//         branch = ~branch;
-//         if(root->children[branch+1] != NULL) { //This was root->children[branch] before, but that caused no problems for some reason? wtf? Oh, maybe cause its a B-tree that just never really happens. Yeah I think if there's just one child then that's enough
-// 	        return successor(root->children[branch+1], key, true, false);
-// 	    }
-// 	    else if(branch+1 < root->fusion_internal_tree.tree.meta.size) {
-// 	    	return &root->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&root->fusion_internal_tree, branch+1)];
-// 	   	}
-// 	    return NULL;
-//     }
-//     __m512i* ans;
-//     if(root->children[branch] == NULL || (ans = successor(root->children[branch], key)) == NULL){ //when didn't find the successor below, we now look if the successor is here
-//     	if(branch < root->fusion_internal_tree.tree.meta.size) {
-//     		return &root->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&root->fusion_internal_tree, branch)];
-//     	}
-//     	else return NULL;
-//     }
-//     return ans;
-// }
+
+__m512i* parallel_successor_DLock(fusion_b_node* root, __m512i key, ostream& fout, uint8_t thread_id) { //returns null if there is no successor
+	// if(root == NULL) return NULL;
+    // (root->mtx).shared_lock();
+    // read_lock(root->mtx, thread_id);
+	// if(foundkey) {
+	// 	//cout << "Found key" << endl;
+	// 	int branch = needbig ? root->fusion_internal_tree.tree.meta.size : 0;
+	// 	__m512i* ans = successor(root->children[branch], key, true, needbig);
+	// 	branch = needbig ? (root->fusion_internal_tree.tree.meta.size-1) : 0;
+	// 	return ans == NULL ? &root->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&root->fusion_internal_tree, branch)] : ans;
+	// }
+    // int branch = query_branch_node(&root->fusion_internal_tree, key);
+    // //print_keys_sig_bits(&root->fusion_internal_tree);
+    // //cout << "Branch is " << branch << ", and is it null: " << (root->children[branch < 0 ? 0 : branch] == NULL) << endl;
+    // if(branch < 0) { // exact key match found
+    //     branch = ~branch;
+    //     if(root->children[branch+1] != NULL) { //This was root->children[branch] before, but that caused no problems for some reason? wtf? Oh, maybe cause its a B-tree that just never really happens. Yeah I think if there's just one child then that's enough
+	//         return successor(root->children[branch+1], key, true, false);
+	//     }
+	//     else if(branch+1 < root->fusion_internal_tree.tree.meta.size) {
+	//     	return &root->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&root->fusion_internal_tree, branch+1)];
+	//    	}
+	//     return NULL;
+    // }
+    // __m512i* ans;
+    // if(root->children[branch] == NULL || (ans = successor(root->children[branch], key)) == NULL){ //when didn't find the successor below, we now look if the successor is here
+    // 	if(branch < root->fusion_internal_tree.tree.meta.size) {
+    // 		return &root->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&root->fusion_internal_tree, branch)];
+    // 	}
+    // 	else return NULL;
+    // }
+    // return ans;
+
+    // fusion_b_node* last_node_with_succ = NULL;
+    __m512i* retval = NULL;
+    // int last_node_with_succ_branch = 0; //Again really sus;
+    fusion_b_node* cur = root;
+    fusion_b_node* par = NULL;
+    read_lock(&cur->mtx, WAIT_FOR_LOCK, thread_id);
+    int branch = query_branch_node(&cur->fusion_internal_tree, key);
+    // if(branch < 0) {
+    //     // read_unlock(&cur->mtx, thread_id);
+    //     branch = ~branch;
+    //     if(cur->children[branch+1] != NULL) {
+    //         par = cur;
+    //         cur = par->children[branch+1];
+    //         // if(!read_lock(&cur->mtx, TRY_ONCE_LOCK, thread_id)) {
+    //         //     read_unlock(&cur->mtx, thread_id);
+    //         //     return parallel_successor_DLock(root, key, fout, thread_id);
+    //         // }
+    //     }
+    //     else {
+    //         __m512i* retkey = NULL;
+    //         if (cur->fusion_internal_tree.tree.meta.size > branch+1) {
+    //             retkey = &cur->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&cur->fusion_internal_tree, branch+1)];
+    //         }
+    //         read_unlock(&cur->mtx, thread_id);
+    //         return retkey;
+    //     }
+    // }
+    // else {
+    //     if(cur->children[branch+1] != NULL) {
+    //         last_node_with_succ = cur;
+    //         last_node_with_succ_branch = branch;
+    //     }
+    //     par = cur;
+    //     cur = cur->children[branch];
+    // }
+    if(branch < 0) {
+        branch = (~branch) + 1;
+    }
+    if(cur->fusion_internal_tree.tree.meta.size > branch) {
+        retval = &cur->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&cur->fusion_internal_tree, branch)];
+    }
+    if(cur->children[branch] == NULL) {
+        read_unlock(&cur->mtx, thread_id);
+        return retval;
+    }
+    par = cur;
+    cur = par->children[branch];
+    
+    if(!read_lock(&cur->mtx, TRY_ONCE_LOCK, thread_id)) {
+        read_unlock(&par->mtx, thread_id);
+        return parallel_successor_DLock(root, key, fout, thread_id);
+    }
+    while(true) { //assumes par and cur exist and are locked according to the paradigm.
+        int branch = query_branch_node(&cur->fusion_internal_tree, key);
+        // fusion_b_node* nc = NULL;
+        // if(branch < 0) {
+        //     // read_unlock(&cur->mtx, thread_id);
+        //     branch = ~branch;
+        //     if(cur->children[branch+1] != NULL) {
+        //         nc = cur->children[branch+1];
+        //         // if(!read_lock(&cur->mtx, TRY_ONCE_LOCK, thread_id)) {
+        //         //     read_unlock(&cur->mtx, thread_id);
+        //         //     return parallel_successor_DLock(root, key, fout, thread_id);
+        //         // }
+        //     }
+        //     else {
+        //         if (cur->fusion_internal_tree.tree.meta.size > branch+1) {
+        //             __m512i* retkey = &cur->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&cur->fusion_internal_tree, branch+1)];
+        //             read_unlock(&par->mtx, thread_id);
+        //             read_unlock(&cur->mtx, thread_id);
+        //             return retkey;
+        //         }
+        //         else {
+        //             if(last_node_with_succ == NULL) {
+        //                 read_unlock(&par->mtx, thread_id);
+        //                 read_unlock(&cur->mtx, thread_id);
+        //                 return NULL;
+        //             }
+        //             //THIS IS SOME REALLY SUS STUFF, SO FIX
+        //             read_unlock(&par->mtx, thread_id);
+        //             read_unlock(&cur->mtx, thread_id);
+        //             if(!read_lock(&last_node_with_succ->mtx, TRY_ONCE_LOCK, thread_id)) {
+        //                 return parallel_successor_DLock(root, key, fout, thread_id);
+        //             }
+        //             if(last_node_with_succ->fusion_internal_tree.tree.meta.size > last_node_with_succ_branch) {
+        //                 __m512i* retkey = &last_node_with_succ->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&last_node_with_succ->fusion_internal_tree, last_node_with_succ_branch)];
+        //                 read_unlock(&last_node_with_succ->mtx, thread_id);
+        //                 return retkey;
+        //             }
+        //             else { 
+        //                 read_unlock(&last_node_with_succ->mtx, thread_id);
+        //                 return NULL;
+        //             }
+        //         }
+        //     }
+        // }
+        // else {
+        //     if(branch <= MAX_FUSION_SIZE && cur->children[branch+1] != NULL) {
+        //         last_node_with_succ = cur;
+        //     }
+        //     else if (cur->children[branch] == NULL) {
+        //         if(last_node_with_succ == NULL) {
+
+        //         }
+        //     }
+        //     nc = cur->children[branch];
+        // }
+        // if(nc != NULL) {
+        //     if(!read_lock(&nc->mtx, TRY_ONCE_LOCK, thread_id)) {
+        //         read_unlock(&par->mtx, thread_id);
+        //         read_unlock(&cur->mtx, thread_id);
+        //         return parallel_successor_DLock(root, key, fout, thread_id);
+        //     }
+        //     read_unlock(&par->mtx, thread_id);
+        //     par = cur;
+        //     cur = nc;
+        // }
+        if(branch < 0) {
+            branch = (~branch) + 1;
+        }
+        if(cur->fusion_internal_tree.tree.meta.size > branch) {
+            retval = &cur->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&cur->fusion_internal_tree, branch)];
+        }
+        if(cur->children[branch] == NULL) {
+            read_unlock(&par->mtx, thread_id);
+            read_unlock(&cur->mtx, thread_id);
+            return retval;
+        }
+        if(!read_lock(&cur->children[branch]->mtx, TRY_ONCE_LOCK, thread_id)) {
+            read_unlock(&par->mtx, thread_id);
+            read_unlock(&cur->mtx, thread_id);
+            return parallel_successor_DLock(root, key, fout, thread_id);
+        }
+        read_unlock(&par->mtx, thread_id);
+        par = cur;
+        cur = cur->children[branch];
+    }   
+}
+
+__m512i* successor(fusion_b_node* root, __m512i key, bool foundkey /*=false*/, bool needbig/*=false*/) { //returns null if there is no successor
+    if(root == NULL) return NULL;
+    __m512i* retval = NULL;
+    fusion_b_node* cur = root;
+    while(true) {
+        int branch = query_branch_node(&cur->fusion_internal_tree, key);
+        if(branch < 0) {
+            branch = (~branch) + 1;
+        }
+        if(cur->fusion_internal_tree.tree.meta.size > branch) {
+            retval = &cur->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&cur->fusion_internal_tree, branch)];
+        }
+        if(cur->children[branch] == NULL) {
+            return retval;
+        }
+        cur = cur->children[branch];
+    }
+}
+
+//TODO: make sure the following predecessor functions are correct (I just quickly modified them from successor)
+__m512i* predecessor(fusion_b_node* root, __m512i key, bool foundkey /*=false*/, bool needbig/*=false*/) { //returns null if there is no successor
+    if(root == NULL) return NULL;
+    __m512i* retval = NULL;
+    fusion_b_node* cur = root;
+    while(true) {
+        int branch = query_branch_node(&cur->fusion_internal_tree, key);
+        if(branch < 0) {
+            branch = (~branch) ;
+        }
+        if(branch > 0) {
+            retval = &cur->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&cur->fusion_internal_tree, branch-1)];
+        }
+        if(cur->children[branch] == NULL) {
+            return retval;
+        }
+        cur = cur->children[branch];
+    }
+}
+
+__m512i* parallel_predecessor_DLock(fusion_b_node* root, __m512i key, ostream& fout, uint8_t thread_id) { //returns null if there is no successor
+    __m512i* retval = NULL;
+    fusion_b_node* cur = root;
+    fusion_b_node* par = NULL;
+    read_lock(&cur->mtx, WAIT_FOR_LOCK, thread_id);
+    int branch = query_branch_node(&cur->fusion_internal_tree, key);
+    if(branch < 0) {
+        branch = (~branch);
+    }
+    if(branch > 0) {
+        retval = &cur->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&cur->fusion_internal_tree, branch-1)];
+    }
+    if(cur->children[branch] == NULL) {
+        read_unlock(&cur->mtx, thread_id);
+        return retval;
+    }
+    par = cur;
+    cur = par->children[branch];
+    
+    if(!read_lock(&cur->mtx, TRY_ONCE_LOCK, thread_id)) {
+        read_unlock(&par->mtx, thread_id);
+        return parallel_successor_DLock(root, key, fout, thread_id);
+    }
+    while(true) { //assumes par and cur exist and are locked according to the paradigm.
+        int branch = query_branch_node(&cur->fusion_internal_tree, key);
+        if(branch < 0) {
+            branch = (~branch);
+        }
+        if(branch > 0) {
+            retval = &cur->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&cur->fusion_internal_tree, branch-1)];
+        }
+        if(cur->children[branch] == NULL) {
+            read_unlock(&par->mtx, thread_id);
+            read_unlock(&cur->mtx, thread_id);
+            return retval;
+        }
+        if(!read_lock(&cur->children[branch]->mtx, TRY_ONCE_LOCK, thread_id)) {
+            read_unlock(&par->mtx, thread_id);
+            read_unlock(&cur->mtx, thread_id);
+            return parallel_successor_DLock(root, key, fout, thread_id);
+        }
+        read_unlock(&par->mtx, thread_id);
+        par = cur;
+        cur = cur->children[branch];
+    }   
+}

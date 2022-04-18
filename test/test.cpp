@@ -282,7 +282,7 @@ int main(){
 
     //return 0;
     
-    constexpr long long bigtestsize = 1000000;
+    constexpr long long bigtestsize = 10000000;
     __m512i* big_randomlist = static_cast<__m512i*>(std::aligned_alloc(64, bigtestsize*64));
     uint64_t* small_randomlist = (uint64_t*)malloc(bigtestsize*sizeof(uint64_t));
     set<uint64_t> list_set;
@@ -398,7 +398,13 @@ int main(){
     start = chrono::high_resolution_clock::now();
     for(int i=0; i < bigtestsize; i++) {
     	prev = *successor(root, prev);
-    	//assert(first_diff_bit_pos(prev, big_randomlist[i]) == -1);
+    	// assert(first_diff_bit_pos(prev, big_randomlist[i]) == -1);
+        // if(first_diff_bit_pos(prev, big_randomlist[i]) != -1) {
+        //     cout << "Wrong at " << i << endl;
+        //     print_binary_uint64_big_endian((prev)[7], true, 64);
+        //     print_binary_uint64_big_endian(big_randomlist[i][7], true, 64);
+        //     break;
+        // }
     }
     end = chrono::high_resolution_clock::now();
     duration = chrono::duration_cast<chrono::microseconds>(end-start);

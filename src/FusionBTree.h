@@ -28,6 +28,7 @@ void parallel_insert_full_tree_DLock(fusion_b_node* root, __m512i key, ostream& 
 void parallel_insert_full_tree(fusion_b_node* root, __m512i key, ostream& fout);
 __m512i* parallel_successor(fusion_b_node* root, __m512i key, bool foundkey=false, bool needbig=false);
 __m512i* parallel_predecessor(fusion_b_node* root, __m512i key, bool foundkey=false, bool needbig=false);
+__m512i* parallel_successor_DLock(fusion_b_node* root, __m512i key, ostream& fout, uint8_t thread_id);
 
 fusion_b_node* new_empty_node(SimpleAlloc<fusion_b_node, 64>& allocator);
 fusion_b_node* search_key_full_tree(fusion_b_node* root, __m512i key); //searches key in the full tree. Yeah naming needs to be improved. Also what should this actually return? Cause returning fusion_b_node doesn't give you direct say way to get successor or anything

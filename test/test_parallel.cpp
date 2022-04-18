@@ -106,6 +106,24 @@ void parallel_insert_items(fusion_b_node* root, __m512i items[], size_t num, str
     fout.close();
 }
 
+void parallel_succ_items(fusion_b_node* root, __m512i items[], size_t num, string path, uint8_t id) {
+    cout << "path is: " << path << endl;
+    ofstream fout(path);
+    for(size_t i = 0; i < num; i++) {
+        // printTree(root);
+        // cout << "Inserting element " << i << endl;
+        __m512i* test = parallel_successor_DLock(root, items[i], fout, id);
+        // if(i < num-1 && first_diff_bit_pos(*test, items[i+1]) != -1 && id == 0) {
+        //     cout << "Wrong at " << i << endl;
+        //     print_binary_uint64_big_endian((*test)[7], true, 64);
+        //     print_binary_uint64_big_endian(items[i+1][7], true, 64);
+        //     break;
+        // }
+        assert(i >=num-2 || first_diff_bit_pos(*test, items[i+1]) == -1);
+    }
+    fout.close();
+}
+
 int main(int argc, char** argv) {
     unsigned seed = chrono::steady_clock::now().time_since_epoch().count();
     mt19937 generator (2);
@@ -190,5 +208,22 @@ int main(int argc, char** argv) {
     }
     end = chrono::high_resolution_clock::now();
     duration = chrono::duration_cast<chrono::microseconds>(end-start);
-    cout << "Time to retrieve sorted list with fusion tree: " << duration.count() << endl;
+    cout << "Time to retrieve sorted list with fusion tree single threaded: " << duration.count() << endl;
+
+    start = chrono::high_resolution_clock::now();
+    //Figure out how to test this
+    threads.clear();
+    for(size_t i = 0; i < numThreads; i++) {
+        // threads.push_back(std::thread(parallel_insert_items, root, big_randomlist+indices[i], indices[i+1]-indices[i], argv[3+i]));
+        threads.push_back(std::thread(parallel_succ_items, root, big_randomlist+indices[i], indices[i+1]-indices[i], argv[3+i], i));
+    }
+
+    for(auto& th: threads) {
+        th.join();
+    }
+
+    // cout << "random seed is " << seed << endl;
+    end = chrono::high_resolution_clock::now();
+    duration = chrono::duration_cast<chrono::microseconds>(end-start);
+    cout << "Time to parallel retrieve sorted list with fusion tree multi threaded: " << duration.count() << endl;
 }
