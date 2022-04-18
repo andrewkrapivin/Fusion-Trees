@@ -8,11 +8,6 @@
 
 #include "partitioned_counter.h"
 
-#ifdef __cplusplus
-#define __restrict__
-extern "C" {
-#endif
-
 #define NO_LOCK (0x01)
 #define TRY_ONCE_LOCK (0x02)
 #define WAIT_FOR_LOCK (0x04)
@@ -35,6 +30,10 @@ extern "C" {
   void rw_lock_init(ReaderWriterLock *rwlock);
 
   bool read_lock(ReaderWriterLock *rwlock, uint8_t flag, uint8_t thread_id);
+  
+  bool partial_upgrade(ReaderWriterLock *rwlock, uint8_t flag, uint8_t thread_id);
+  void unlock_partial_upgrade(ReaderWriterLock *rwlock);
+  void finish_partial_upgrade(ReaderWriterLock *rwlock);
 
   void read_unlock(ReaderWriterLock *rwlock, uint8_t thread_id);
 
@@ -42,6 +41,4 @@ extern "C" {
 
   void write_unlock(ReaderWriterLock *rwlock);
 
-#ifdef __cplusplus
-}
 #endif

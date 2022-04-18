@@ -4,7 +4,7 @@
 
 #include "lock.h"
 
-#define NUM_COUNTERS 16
+#define NUM_COUNTERS 4
 
 /**
  * Try to acquire a lock once and return even if the lock is busy.
@@ -88,6 +88,36 @@ void read_unlock(ReaderWriterLock *rwlock, uint8_t thread_id) {
   return;
 }
 #endif
+
+
+bool partial_upgrade(ReaderWriterLock *rwlock, uint8_t flag, uint8_t thread_id) {
+  // acquire write lock.
+  if (GET_WAIT_FOR_LOCK(flag) != WAIT_FOR_LOCK) {
+    if (__sync_lock_test_and_set(&rwlock->writer, 1)){
+        read_unlock(rwlock, thread_id);
+      return false;
+    }
+  } else {
+    while (__sync_lock_test_and_set(&rwlock->writer, 1))
+      while (rwlock->writer != 0)
+        ;
+  }
+  // wait for readers to finish
+  read_unlock(rwlock, thread_id);
+
+  return true;
+}
+
+void finish_partial_upgrade(ReaderWriterLock *rwlock) {
+    for (int i = 0; i < NUM_COUNTERS; i++)
+        while (rwlock->pc_counter.local_counters[i].counter)
+            ;
+}
+
+void unlock_partial_upgrade(ReaderWriterLock *rwlock) {
+    __sync_lock_release(&rwlock->writer);
+  return;
+}
 
 /**
  * Try to acquire a write lock and spin until the lock is available.
