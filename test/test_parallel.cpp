@@ -20,6 +20,7 @@
 #include "../src/HelperFuncs.h"
 #include "../src/FusionBTree.h"
 #include "../src/FusionQSort.h"
+#include "../src/lock.h"
 
 uint64_t gen_random_uint64(mt19937& generator) {
     uint64_t A;
