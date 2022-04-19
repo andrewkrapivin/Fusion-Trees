@@ -41,10 +41,6 @@ __m512i gen_random_vec_one_bit(mt19937& generator) {
     std::uniform_int_distribution<uint64_t> temporary_distribution2(0, 7);
     uint64_t posbit = temporary_distribution2(generator);
     A = _mm512_maskz_set1_epi8 (k, (1ull << posbit));
-    /*cout << "Generated random bit at byte " << posbyte << " and bit " << posbit << endl;
-    print_binary_uint64(_cvtmask64_u64(k), true);
-    print_binary_uint64((1ull << posbit), true);
-    print_vec(A, true, 8);*/
     return A;
 }
 
@@ -67,10 +63,6 @@ __m512i gen_vec_one_bit(int bit_pos) {
     __mmask64 k = _cvtu64_mask64(1ull << posbyte);
     uint64_t posbit = bit_pos%8;
     A = _mm512_maskz_set1_epi8 (k, (1ull << posbit));
-    /*cout << "Generated random bit at byte " << posbyte << " and bit " << posbit << endl;
-    print_binary_uint64(_cvtmask64_u64(k), true);
-    print_binary_uint64((1ull << posbit), true);
-    print_vec(A, true, 8);*/
     return A;
 }
 
@@ -93,192 +85,7 @@ void print_node_info(fusion_node& test_node) {
 
 int main(){
     unsigned seed = chrono::steady_clock::now().time_since_epoch().count();
-    //we made this work! 2767760278, 3339913857, 3110249540(4 tests), 3998269307 (size 8!), 4151455078 (size 8), 2969908123 (this was just because I didn't generate unique random vectors), 1262589155 (fixed mask_pos for tmp>=8, but also some weird behavior?), 2126216167 (really dumb lol)
     mt19937 generator (seed);
-
-	__m512i A = {0, 1, 0, 0, 0, 0, 0, 3}; //we treat the number as little endian, cause otherwise it is inconsistent.
-    //Cause the CPU stores each number as little endian, and for let's say the 65th digit to be one, we initialize it as in A, which is really weird to think about, because the earlier numbers are more significant as normal, but then within the numbers its the opposite, but, well, whatever
-    //Little/big endian is pretty annoying
-	__m512i B = {0, 0, 0, 0, 0, 0, 0, 0};
-	
-	//__m512i X = gen_random_vec(generator);
-    //print_vec(B, true);
-    /*cout << first_diff_bit_pos(A, B) << endl;
-    cout << first_diff_bit_pos(B, X) << endl;*/
-
-    /*print_binary_uint64(65, true);
-    print_hex_uint64(65, true);
-    uint64_t x = 65;
-    
-	cout << _lzcnt_u32(1) << endl;
-	
-	cout << first_diff_bit_pos(A, B) <<" afdaff" <<  endl;*/
-
-    __m256i test = {0};
-
-    //print_vec(setbit_each_epi16_in_range(test, 2, 0, 7, 1), true, 16);
-
-    //testing stuff
-    fusion_node test_node = {0};
-    /*add_position_to_extraction_mask(&test_node.tree, first_diff_bit_pos(B, X));
-    add_position_to_extraction_mask(&test_node.tree, first_diff_bit_pos(A, B));
-    print_binary_uint64(test_node.tree.byte_extract, true);
-    print_binary_uint64(test_node.tree.bitextract[0], true, 8);
-    cout << extract_bits(&test_node.tree, A) << endl;
-    cout << extract_bits(&test_node.tree, B) << endl;
-    cout << extract_bits(&test_node.tree, X) << endl; //surprisingly enough seems right
-    cout << diff_bit_to_mask_pos(&test_node, 511) << endl;
-    cout << diff_bit_to_mask_pos(&test_node, 480) << endl;
-    cout << diff_bit_to_mask_pos(&test_node, 420) << endl;*/
-    //cout << insert(&test_node, X) << endl;
-
-    //let's test extraction
-    /*test_node.tree.byte_extract = (1ull << 8) + (1ull << 56) + 1ull;
-    cout << test_node.tree.byte_extract << endl;
-
-    test_node.tree.bitextract[0] = 0b1000000000100000000;
-
-    cout << "SDFSDF" << endl;
-    cout << extract_bits(&test_node.tree, A) << endl;*/
-
-    //let's test inserting bit in mask and extraction together
-    /*add_position_to_extraction_mask(&test_node.tree, 64);
-    print_binary_uint64(test_node.tree.byte_extract, true);
-    print_binary_uint64(test_node.tree.bitextract[0], true);
-    cout << extract_bits(&test_node.tree, A) << endl;
-    add_position_to_extraction_mask(&test_node.tree, 35);
-    print_binary_uint64(test_node.tree.byte_extract, true);
-    print_binary_uint64(test_node.tree.bitextract[0], true);
-    cout << extract_bits(&test_node.tree, A) << endl;
-    add_position_to_extraction_mask(&test_node.tree, 448);
-    print_binary_uint64(test_node.tree.byte_extract, true);
-    print_binary_uint64(test_node.tree.bitextract[0], true);
-    print_binary_uint64(test_node.tree.bitextract[1], true);
-    cout << extract_bits(&test_node.tree, A) << endl;
-    add_position_to_extraction_mask(&test_node.tree, 1);
-    print_binary_uint64(test_node.tree.byte_extract, true);
-    print_binary_uint64(test_node.tree.bitextract[0], true);
-    print_binary_uint64(test_node.tree.bitextract[1], true);
-    cout << extract_bits(&test_node.tree, A) << endl;
-    add_position_to_extraction_mask(&test_node.tree, 76);
-    print_binary_uint64(test_node.tree.byte_extract, true);
-    print_binary_uint64(test_node.tree.bitextract[0], true);
-    print_binary_uint64(test_node.tree.bitextract[1], true);
-    cout << extract_bits(&test_node.tree, A) << endl;
-
-    add_position_to_extraction_mask(&test_node.tree, 9);
-    print_binary_uint64(test_node.tree.byte_extract, true);
-    print_binary_uint64(test_node.tree.bitextract[0], true);
-    print_binary_uint64(test_node.tree.bitextract[1], true);
-    cout << extract_bits(&test_node.tree, A) << endl;
-    add_position_to_extraction_mask(&test_node.tree, 17);
-    print_binary_uint64(test_node.tree.byte_extract, true);
-    print_binary_uint64(test_node.tree.bitextract[0], true);
-    print_binary_uint64(test_node.tree.bitextract[1], true);
-    cout << extract_bits(&test_node.tree, A) << endl;
-    add_position_to_extraction_mask(&test_node.tree, 27);
-    print_binary_uint64(test_node.tree.byte_extract, true);
-    print_binary_uint64(test_node.tree.bitextract[0], true);
-    print_binary_uint64(test_node.tree.bitextract[1], true);
-    cout << extract_bits(&test_node.tree, A) << endl;
-    add_position_to_extraction_mask(&test_node.tree, 95);
-
-    print_binary_uint64(test_node.tree.byte_extract, true);
-    print_binary_uint64(test_node.tree.bitextract[0], true);
-    print_binary_uint64(test_node.tree.bitextract[1], true);
-    cout << extract_bits(&test_node.tree, A) << endl;*/
-
-    /*insert(&test_node, A);
-    print_binary_uint64(test_node.tree.byte_extract, true);
-    print_binary_uint64(test_node.tree.bitextract[0], true);
-    print_binary_uint64(test_node.tree.bitextract[1], true);
-    print_vec(test_node.tree.treebits, true, 16);
-    print_vec(test_node.ignore_mask, true, 16);
-    insert(&test_node, B);
-    print_binary_uint64(test_node.tree.byte_extract, true);
-    print_binary_uint64(test_node.tree.bitextract[0], true);
-    print_binary_uint64(test_node.tree.bitextract[1], true);
-    print_vec(test_node.tree.treebits, true, 16);
-    print_vec(test_node.ignore_mask, true, 16);
-
-    cout << _tzcnt_u32(1) << endl;*/
-
-    //The Real Test
-    int numtests=1;
-    constexpr int sizetests=3;
-    int numfailed=0;
-    int failedindex=-1;
-    int testindex=-1;
-    for(int i=0; i<numtests; i++) {
-        memcpy(&test_node, &Empty_Fusion_Node, sizeof(fusion_node));
-        
-        __m512i randomlist[sizetests];
-        //vector<vector<uint64_t>> randomlistvec(16);
-        vector<int> positions = generate_random_positions(generator, sizetests);
-        for(int j=0; j<sizetests; j++) {
-            uniform_int_distribution<uint64_t> temporary_distribution(0, 1);
-            //if(temporary_distribution(generator))
-                //randomlist[j] = gen_vec_one_bit(positions[j]);
-            //else 
-                randomlist[j] = gen_random_vec(generator);
-        }
-        if(testindex!=-1 && testindex!=i) continue;
-        make_fast(&test_node);
-        for(int j=0; j<sizetests; j++) {
-            /*cout << "Inserting: ";
-            print_vec(randomlist[j], true);*/
-            insert_key_node(&test_node, randomlist[j]);
-            make_fast(&test_node);
-            /*print_node_info(test_node);
-            cout << "Inserted the " << j << "th thing" << endl;*/
-        }
-        /*for(int j=0; j<sizetests; j++) {
-            print_binary_uint64_big_endian(randomlist[j][7], true, 64, 8);
-        }*/
-        /*for(int j=0; j<sizetests; j++) {
-            cout << first_diff_bit_pos(B, randomlist[j]) << endl;
-        }*/
-        sort(randomlist, randomlist+sizetests, compare__m512i);
-        /*for(int j=0; j<sizetests; j++) {
-            print_vec(randomlist[j], true);
-        }*/
-        for(int j=0; j<sizetests; j++){
-            int branch = query_branch_node(&test_node, randomlist[j]);
-            if(branch >= 0) {
-                //cout << "Failed test " << i << ", and didn't even think the key was there" << endl;
-                numfailed++;
-                failedindex=i;
-                break;
-            }
-            branch = ~branch;
-            if(branch != j) {
-                //cout << "Failed test " << i << " at node " << j << endl;
-                numfailed++;
-                failedindex=i;
-                break;
-            }
-        }
-        for(int j=0; j<sizetests; j++){
-            randomlist[j][0]++;
-            int branch = query_branch_node(&test_node, randomlist[j]);
-            if(branch < 0) {
-                //cout << "Failed test " << i << ", and didn't even think the key was there" << endl;
-                numfailed++;
-                failedindex=i;
-                break;
-            }
-            if(branch != j+1) {
-                //cout << "Failed test " << i << " at node " << j << endl;
-                numfailed++;
-                failedindex=i;
-                break;
-            }
-        }
-    }
-    //print_keys_sig_bits(&test_node);
-    //cout << "Num failed: " << numfailed << ", and one failed index (if any) is " << failedindex << endl;
-
-    cout << sizeof(fusion_node) << endl;
 
     //return 0;
     
@@ -287,33 +94,15 @@ int main(){
     uint64_t* small_randomlist = (uint64_t*)malloc(bigtestsize*sizeof(uint64_t));
     set<uint64_t> list_set;
     boost::container::set<uint64_t> boost_set;
-    //cout << "DFSDFDS" << endl;
-    fusion_b_node* root = NULL;
-    //set<__m512i, decltype(compare__m512i)*, allocator<__m512i>> randomlist_set;
+    FusionBTree ft();
     for(int i=0; i < bigtestsize; i++) {
-    	//cout << "inserting " << i << "th vector" << endl;
     	big_randomlist[i] = gen_random_vec(generator);
         small_randomlist[i] = gen_random_uint64(generator);
-        // if(!(i == 0 || compare__m512i(big_randomlist[i], big_randomlist[i-1]) == fast_compare__m512i(big_randomlist[i], big_randomlist[i-1]))) {
-        //     cout << "Compared two numbers at " << i << " and got diff result:" << endl;
-        //     cout << "Should be " << compare__m512i(big_randomlist[i], big_randomlist[i-1]) << endl;
-        //     exit(1);
-        // }
-    	//randomlist_set.insert(big_randomlist[i]);
-    	//root = insert_full_tree(root, big_randomlist[i]);
-    	//print_binary_uint64_big_endian(big_randomlist[i][7], true, 64, 8);
-    	//print_binary_uint64_big_endian(big_randomlist[i][7], true);
-    	//print_vec(big_randomlist[i], true);
-    	//cout << ((int)root->fusion_internal_tree.tree.meta.size) << endl;
-    	//printTree(root);
     }
     auto start = chrono::high_resolution_clock::now();
-    SimpleAlloc<fusion_b_node, 64> allocator(bigtestsize/8); //gotta be a bit more efficient here but whatever lol
+    // SimpleAlloc<fusion_b_node, 64> allocator(bigtestsize/8); //gotta be a bit more efficient here but whatever lol
     for(int i=0; i < bigtestsize; i++) {
-        // cout << "i is: " << i << endl;
-        //if(root!= NULL) printTree(root);
-    	root = insert_full_tree(root, big_randomlist[i], allocator);
-        //printTree(root);
+    	ft.insert(big_randomlist[i]);
     }
     cout << "random seed is " << seed << endl;
     auto end = chrono::high_resolution_clock::now();
@@ -339,14 +128,11 @@ int main(){
     __m512i* prev2;
     uint64_t cNull = 0;
     start = chrono::high_resolution_clock::now();
-    // for(int j=0; j < 100; j++){
-        for(int i=0; i < bigtestsize; i++) {
-            prev2 = successor(root, big_randomlist[i]);
-            if(prev2 == NULL) cNull++;
-            //assert(first_diff_bit_pos(prev2, big_randomlist[i]) == -1);
-        }
-    // }
-    // assert(cNull == 1);
+    for(int i=0; i < bigtestsize; i++) {
+        prev2 = ft.successor(big_randomlist[i]);
+        if(prev2 == NULL) cNull++;
+        //assert(first_diff_bit_pos(prev2, big_randomlist[i]) == -1);
+    }
     end = chrono::high_resolution_clock::now();
     duration = chrono::duration_cast<chrono::microseconds>(end-start);
     cout << "Time to query nodes in random order: " << duration.count() << endl;
@@ -356,10 +142,6 @@ int main(){
     end = chrono::high_resolution_clock::now();
     duration = chrono::duration_cast<chrono::microseconds>(end-start);
     cout << "Time to sort with std::sort: " << duration.count() << endl;
-
-    // for(size_t i = 0; i < bigtestsize; i++) {
-    //     print_binary_uint64_big_endian(big_randomlist[i][7], true, 64, 16);
-    // }
 
     for(size_t i = 0; i < bigtestsize; i++) {
         std::uniform_int_distribution<uint64_t> temporary_distribution(0, bigtestsize-1);
@@ -381,79 +163,20 @@ int main(){
             exit(1);
         }
     }
-
-    // for(size_t i = 0; i < bigtestsize; i++) {
-    //     print_binary_uint64_big_endian(big_randomlist[i][7], true, 64, 16);
-    // }
-    
-    /*start = chrono::high_resolution_clock::now();
-    for(int i=0; i < bigtestsize; i++) {
-    	root = insert_full_tree(root, big_randomlist[i]);
-    }
-    end = chrono::high_resolution_clock::now();
-    duration = chrono::duration_cast<chrono::microseconds>(end-start);
-    cout << "Time to insert: " << duration.count() << endl;*/
     
     __m512i prev = {0};
     start = chrono::high_resolution_clock::now();
     for(int i=0; i < bigtestsize; i++) {
-    	prev = *successor(root, prev);
+    	prev = *ft.successor(prev);
     	// assert(first_diff_bit_pos(prev, big_randomlist[i]) == -1);
-        // if(first_diff_bit_pos(prev, big_randomlist[i]) != -1) {
-        //     cout << "Wrong at " << i << endl;
-        //     print_binary_uint64_big_endian((prev)[7], true, 64);
-        //     print_binary_uint64_big_endian(big_randomlist[i][7], true, 64);
-        //     break;
-        // }
     }
     end = chrono::high_resolution_clock::now();
     duration = chrono::duration_cast<chrono::microseconds>(end-start);
     cout << "Time to retrieve sorted list with fusion tree: " << duration.count() << endl;
 
-    // long long count = 0;
-    // start = chrono::high_resolution_clock::now();
-    // for(int i=0; i < bigtestsize; i++) {
-    //     count += query_branch(&root->fusion_internal_tree, big_randomlist[i]);
-    // 	//assert(first_diff_bit_pos(prev, big_randomlist[i]) == -1);
-    // }
-    // end = chrono::high_resolution_clock::now();
-    // duration = chrono::duration_cast<chrono::microseconds>(end-start);
-    // cout << "Time to query slow: " << duration.count() << endl;
 
-    // start = chrono::high_resolution_clock::now();
-    // for(int i=0; i < bigtestsize; i++) {
-    //     count += query_branch_fast(&root->fusion_internal_tree, big_randomlist[i]);
-    // 	//assert(first_diff_bit_pos(prev, big_randomlist[i]) == -1);
-    // }
-    // end = chrono::high_resolution_clock::now();
-    // duration = chrono::duration_cast<chrono::microseconds>(end-start);
-    // cout << "Time to query fast: " << duration.count() << " FDFSDF " << count << endl;
-
-    // start = chrono::high_resolution_clock::now();
-    // for(int i=0; i < bigtestsize; i++) {
-    //     count += query_branch_fast2(&root->fusion_internal_tree, big_randomlist[i]);
-    // 	//assert(first_diff_bit_pos(prev, big_randomlist[i]) == -1);
-    // }
-    // end = chrono::high_resolution_clock::now();
-    // duration = chrono::duration_cast<chrono::microseconds>(end-start);
-    // cout << "Time to query fast2: " << duration.count() << " FDFSDF " << count << endl;
-
-    /*uint64_t prev = 0;
-    start = chrono::high_resolution_clock::now();
-    for(int i=0; i < bigtestsize; i++) {
-    	//prev = *list_set
-    }
-    end = chrono::high_resolution_clock::now();
-    duration = chrono::duration_cast<chrono::microseconds>(end-start);
-    cout << "Time to retrieve sorted list with fusion tree: " << duration.count() << endl;*/
-    //sort(big_randomlist, big_randomlist+bigtestsize, compare__m512i);
-    /*for(int i=0; i < bigtestsize; i++) {
-    	root = insert_full_tree(root, big_randomlist[i]);
-    }*/
     for(int i=0; i < bigtestsize-1; i++) {
-    	//cout << "Searching ";
-    	//print_binary_uint64_big_endian(big_randomlist[i][7], true, 64, 8);
-    	__m512i* treesucc = successor(root, big_randomlist[i]);
+    	__m512i* treesucc = ft.successor(root, big_randomlist[i]);
     	if(treesucc == NULL){
     		cout << "treesuc is NULL" << endl;
             break;
@@ -467,28 +190,11 @@ int main(){
     	}
     }
 
-    // for(int i=bigtestsize-1; i > 0 ; i--) {
-    // 	//cout << "Searching ";
-    // 	//print_binary_uint64_big_endian(big_randomlist[i][7], true, 64, 8);
-    // 	__m512i* treepred = predecessor(root, big_randomlist[i]);
-    // 	if(treepred == NULL){
-    // 		cout << "treepred is NULL" << endl;
-    //         break;
-    // 	}
-    // 	else {
-    // 		if(first_diff_bit_pos(*treepred, big_randomlist[i-1]) != -1) {
-    // 			cout << "Wrong pred at " << i << endl;
-    //             print_binary_uint64_big_endian(big_randomlist[i-1][7], true, 64, 8);
-    // 			print_binary_uint64_big_endian((*treepred)[7], true, 64, 8);
-    // 			break;
-	// 	}
-    // 	}
-    // }
-    // //printTree(root);
-    // cout << "Num Nodes: " << numNodes(root) << endl;
-    // cout << "Total Depth: " << totalDepth(root) << endl;
-    // cout << "Mem usage: " << memUsage(root) << endl;
-    // cout << "max depth: " << maxDepth(root) << endl;
-    // cout << "random seed is " << seed << endl;
+    // ft.printTree();
+    cout << "Num Nodes: " << ft.numNodes() << endl;
+    cout << "Total Depth: " << ft.totalDepth() << endl;
+    cout << "Mem usage: " << ft.memUsage() << endl;
+    cout << "max depth: " << ft.maxDepth() << endl;
+    cout << "random seed is " << seed << endl;
 }
 

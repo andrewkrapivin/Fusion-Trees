@@ -46,10 +46,6 @@ __m512i gen_random_vec_one_bit(mt19937& generator) {
     std::uniform_int_distribution<uint64_t> temporary_distribution2(0, 7);
     uint64_t posbit = temporary_distribution2(generator);
     A = _mm512_maskz_set1_epi8 (k, (1ull << posbit));
-    /*cout << "Generated random bit at byte " << posbyte << " and bit " << posbit << endl;
-    print_binary_uint64(_cvtmask64_u64(k), true);
-    print_binary_uint64((1ull << posbit), true);
-    print_vec(A, true, 8);*/
     return A;
 }
 
@@ -72,10 +68,6 @@ __m512i gen_vec_one_bit(int bit_pos) {
     __mmask64 k = _cvtu64_mask64(1ull << posbyte);
     uint64_t posbit = bit_pos%8;
     A = _mm512_maskz_set1_epi8 (k, (1ull << posbit));
-    /*cout << "Generated random bit at byte " << posbyte << " and bit " << posbit << endl;
-    print_binary_uint64(_cvtmask64_u64(k), true);
-    print_binary_uint64((1ull << posbit), true);
-    print_vec(A, true, 8);*/
     return A;
 }
 
@@ -96,30 +88,22 @@ void print_node_info(fusion_node& test_node) {
     print_vec(test_node.key_positions, true, 8);
 }
 
-void parallel_insert_items(fusion_b_node* root, __m512i items[], size_t num, string path, uint8_t id) {
+void parallel_insert_items(parallel_fusion_b_node* root, __m512i items[], size_t num, string path, uint8_t id) {
     cout << "path is: " << path << endl;
     ofstream fout(path);
+    ParallelFusionBTree pft(root, id);
     for(size_t i = 0; i < num; i++) {
-        // printTree(root);
-        // cout << "Inserting element " << i << endl;
-        parallel_insert_full_tree_DLock(root, items[i], fout, id);
+        pft.insert(items[i]);
     }
     fout.close();
 }
 
-void parallel_succ_items(fusion_b_node* root, __m512i items[], size_t num, string path, uint8_t id) {
+void parallel_succ_items(parallel_fusion_b_node* root, __m512i items[], size_t num, string path, uint8_t id) {
     cout << "path is: " << path << endl;
     ofstream fout(path);
+    ParallelFusionBTree pft(root, id);
     for(size_t i = 0; i < num; i++) {
-        // printTree(root);
-        // cout << "Inserting element " << i << endl;
-        __m512i* test = parallel_successor_DLock(root, items[i], fout, id);
-        // if(i < num-1 && first_diff_bit_pos(*test, items[i+1]) != -1 && id == 0) {
-        //     cout << "Wrong at " << i << endl;
-        //     print_binary_uint64_big_endian((*test)[7], true, 64);
-        //     print_binary_uint64_big_endian(items[i+1][7], true, 64);
-        //     break;
-        // }
+        __m512i* test = pft.successor(items[i]);
         assert(i >=num-2 || first_diff_bit_pos(*test, items[i+1]) == -1);
     }
     fout.close();
@@ -128,7 +112,7 @@ void parallel_succ_items(fusion_b_node* root, __m512i items[], size_t num, strin
 int main(int argc, char** argv) {
     unsigned seed = chrono::steady_clock::now().time_since_epoch().count();
     mt19937 generator (2);
-    fusion_b_node* root = new fusion_b_node();
+    parallel_fusion_b_node* root = new parallel_fusion_b_node();
     rw_lock_init(&root->mtx);
 
     size_t bigtestsize = 30;
@@ -140,20 +124,7 @@ int main(int argc, char** argv) {
     if(argc < 3+numThreads) {
         exit(1);
     }
-    // vector<ofstream> actual_files(argc >= 3+numThreads ? numThreads : 0);
-    // vector<ostream> files(numThreads);
-    // if(argc >= 3+numThreads) {
-    //     for(int i=0; i = numThreads; i++) {
-    //         actual_files[i].open(argv[3+i]);
-    //         ostream f(&actual_files[i]);
-    //         files[i] = f;
-    //     }
-    // }
-    // else {
-    //     for(int i=1; i <= numThreads; i++) {
-    //         files[i].open(&cout);
-    //     }
-    // }
+    
     __m512i* big_randomlist = static_cast<__m512i*>(std::aligned_alloc(64, bigtestsize*64));
     for(int i=0; i < bigtestsize; i++) {
     	big_randomlist[i] = gen_random_vec(generator);
@@ -168,7 +139,6 @@ int main(int argc, char** argv) {
     //Figure out how to test this
     std::vector<std::thread> threads;
     for(size_t i = 0; i < numThreads; i++) {
-        // threads.push_back(std::thread(parallel_insert_items, root, big_randomlist+indices[i], indices[i+1]-indices[i], argv[3+i]));
         threads.push_back(std::thread(parallel_insert_items, root, big_randomlist+indices[i], indices[i+1]-indices[i], argv[3+i], i));
     }
 
@@ -180,20 +150,6 @@ int main(int argc, char** argv) {
     auto end = chrono::high_resolution_clock::now();
     auto duration = chrono::duration_cast<chrono::microseconds>(end-start);
     cout << "Time to insert: " << duration.count() << endl;
-
-    // start = chrono::high_resolution_clock::now();
-    // SimpleAlloc<fusion_b_node, 64> allocator(bigtestsize/8); //gotta be a bit more efficient here but whatever lol
-    // fusion_b_node* root2 = new_empty_node(allocator);
-    // for(int i=0; i < bigtestsize; i++) {
-    //     // cout << "i is: " << i << endl;
-    //     //if(root!= NULL) printTree(root);
-    // 	root2 = insert_full_tree(root2, big_randomlist[i], allocator);
-    // }
-    // // printTree(root);
-    // cout << "random seed is " << seed << endl;
-    // end = chrono::high_resolution_clock::now();
-    // duration = chrono::duration_cast<chrono::microseconds>(end-start);
-    // cout << "Time to insert: " << duration.count() << endl;
 
     start = chrono::high_resolution_clock::now();
     sort(big_randomlist, big_randomlist+bigtestsize, fast_compare__m512i);
