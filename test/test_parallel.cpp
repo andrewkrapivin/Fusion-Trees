@@ -114,6 +114,9 @@ int main(int argc, char** argv) {
     mt19937 generator (2);
     parallel_fusion_b_node* root = new parallel_fusion_b_node();
     rw_lock_init(&root->mtx);
+    cout << sizeof(parallel_fusion_b_node) << endl;
+    cout << sizeof(pnodetest1) << endl;
+    cout << sizeof(pnodetest2) << endl;
 
     size_t bigtestsize = 30;
     if(argc >= 2)
@@ -157,15 +160,15 @@ int main(int argc, char** argv) {
     duration = chrono::duration_cast<chrono::microseconds>(end-start);
     cout << "Time to sort with std::sort: " << duration.count() << endl;
 
-    __m512i prev = {0};
-    start = chrono::high_resolution_clock::now();
-    for(int i=0; i < bigtestsize; i++) {
-    	prev = *successor(root, prev);
-    	assert(first_diff_bit_pos(prev, big_randomlist[i]) == -1);
-    }
-    end = chrono::high_resolution_clock::now();
-    duration = chrono::duration_cast<chrono::microseconds>(end-start);
-    cout << "Time to retrieve sorted list with fusion tree single threaded: " << duration.count() << endl;
+    // __m512i prev = {0};
+    // start = chrono::high_resolution_clock::now();
+    // for(int i=0; i < bigtestsize; i++) {
+    // 	prev = *successor(root, prev);
+    // 	assert(first_diff_bit_pos(prev, big_randomlist[i]) == -1);
+    // }
+    // end = chrono::high_resolution_clock::now();
+    // duration = chrono::duration_cast<chrono::microseconds>(end-start);
+    // cout << "Time to retrieve sorted list with fusion tree single threaded: " << duration.count() << endl;
 
     start = chrono::high_resolution_clock::now();
     //Figure out how to test this

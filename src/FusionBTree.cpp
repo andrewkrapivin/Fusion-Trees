@@ -200,7 +200,7 @@ size_t numNodes(fusion_b_node* root) {
     return num;
 }
 
-size_t totalDepth(fusion_b_node* root, size_t dep) {
+size_t totalDepth(fusion_b_node* root, size_t dep = 0) {
     size_t num = dep;
 	for(int i = 0; i < MAX_FUSION_SIZE+1; i++) {
 		if(root->children[i] != NULL)
@@ -218,47 +218,50 @@ FusionBTree::FusionBTree() {
 }
 
 void FusionBTree::insert(__m512i key) {
-    root = insert_full_tree(root, key);
+    root = ::insert_full_tree(root, key);
 }
 
 __m512i* FusionBTree::successor(__m512i key) {
-    return successor(root, key);
+    return ::successor(root, key);
 }
 
 __m512i* FusionBTree::predecessor(__m512i key) {
-    return predecessor(root, key);
+    return ::predecessor(root, key);
 }
 
 void FusionBTree::printTree() {
-    printTree(root);
+    ::printTree(root);
 }
 
 int FusionBTree::maxDepth() {
-    return maxDepth(root);
+    return ::maxDepth(root);
 }
 
 size_t FusionBTree::numNodes() {
-    return numNodes(root);
+    return ::numNodes(root);
 }
 
 size_t FusionBTree::totalDepth() {
-    return totalDepth(root);
+    return ::totalDepth(root);
 }
 
 size_t FusionBTree::memUsage() {
-    return memUsage(root);
+    return ::memUsage(root);
 }
 
 
 
+static void deletepnode(parallel_fusion_b_node* node) {
+    pc_destructor(&node->mtx.pc_counter);
+    free(node);
+}
 
-
-static void split_node_DLock(fusion_b_node* node, fusion_b_node* par, uint8_t thread_id) {
+static bool split_node_DLock(parallel_fusion_b_node* node, parallel_fusion_b_node* par, uint8_t thread_id) {
     fusion_node* key_fnode = &node->fusion_internal_tree;
 
-    fusion_b_node* newlefthalf = new fusion_b_node();
+    parallel_fusion_b_node* newlefthalf = new parallel_fusion_b_node();
     rw_lock_init(&newlefthalf->mtx);
-    fusion_b_node* newrighthalf = new fusion_b_node();
+    parallel_fusion_b_node* newrighthalf = new parallel_fusion_b_node();
     rw_lock_init(&newrighthalf->mtx);
 
     constexpr int medpos = MAX_FUSION_SIZE/2; //two choices since max size even: maybe randomize?
@@ -281,14 +284,15 @@ static void split_node_DLock(fusion_b_node* node, fusion_b_node* par, uint8_t th
     __m512i median = get_key_from_sorted_pos(&node->fusion_internal_tree, medpos);
 
     if(par == NULL) {
-        memset(&node->fusion_internal_tree, 0, sizeof(fusion_node) + sizeof(fusion_b_node*)*(MAX_FUSION_SIZE+1));
+        memset(&node->fusion_internal_tree, 0, sizeof(fusion_node) + sizeof(parallel_fusion_b_node*)*(MAX_FUSION_SIZE+1));
         insert_key_node(&node->fusion_internal_tree, median);
         node->children[0] = newlefthalf;
         node->children[1] = newrighthalf;
-        return;
+        return false;
     }
 
-    node->deleted = true;
+    // node->deleted = true;
+    // free(node);
     insert_key_node(&par->fusion_internal_tree, median);
     int pos = ~query_branch_node(&par->fusion_internal_tree, median);
     for(int i=par->fusion_internal_tree.tree.meta.size /*ok that is ridiculous, fix that*/; i >= pos+2; i--) {
@@ -296,9 +300,10 @@ static void split_node_DLock(fusion_b_node* node, fusion_b_node* par, uint8_t th
     }
     par->children[pos] = newlefthalf;
     par->children[pos+1] = newrighthalf;
+    return true;
 }
 
-bool try_upgrade_reverse_order_DLock(fusion_b_node* child, fusion_b_node* par, uint8_t thread_id) {
+bool try_upgrade_reverse_order_DLock(parallel_fusion_b_node* child, parallel_fusion_b_node* par, uint8_t thread_id) {
     if(!partial_upgrade(&child->mtx, TRY_ONCE_LOCK, thread_id)) {
         read_unlock(&par->mtx, thread_id);
         return false;
@@ -313,19 +318,23 @@ bool try_upgrade_reverse_order_DLock(fusion_b_node* child, fusion_b_node* par, u
 }
 
 //keep track of how many times we "restart" in the tree
-void parallel_insert_full_tree_DLock(fusion_b_node* root, __m512i key, uint8_t thread_id) {
+void parallel_insert_full_tree_DLock(parallel_fusion_b_node* root, __m512i key, uint8_t thread_id) {
     // assert(root != NULL);
 
-    fusion_b_node* par = NULL;
-    fusion_b_node* cur = root;
+    parallel_fusion_b_node* par = NULL;
+    parallel_fusion_b_node* cur = root;
     read_lock(&cur->mtx, WAIT_FOR_LOCK, thread_id);
 
     if(node_full(&cur->fusion_internal_tree)) {
         if(partial_upgrade(&cur->mtx, TRY_ONCE_LOCK, thread_id)) {
             finish_partial_upgrade(&cur->mtx);
-            split_node_DLock(cur, par, thread_id);
-            write_unlock(&cur->mtx);
-        };
+            if(!split_node_DLock(cur, par, thread_id)) {
+                write_unlock(&cur->mtx);
+            }
+            else {
+                deletepnode(cur);
+            }
+        }
         return parallel_insert_full_tree_DLock(root, key, thread_id);
     }
     int branch = query_branch_node(&cur->fusion_internal_tree, key);
@@ -338,7 +347,12 @@ void parallel_insert_full_tree_DLock(fusion_b_node* root, __m512i key, uint8_t t
             finish_partial_upgrade(&cur->mtx);
             if(node_full(&cur->fusion_internal_tree)) {
                 split_node_DLock(cur, par, thread_id);
-                write_unlock(&cur->mtx);
+                if(!split_node_DLock(cur, par, thread_id)) {
+                    write_unlock(&cur->mtx);
+                }
+                else {
+                    deletepnode(cur);
+                }
                 return parallel_insert_full_tree_DLock(root, key, thread_id);
             }
             insert_key_node(&cur->fusion_internal_tree, key);
@@ -360,9 +374,13 @@ void parallel_insert_full_tree_DLock(fusion_b_node* root, __m512i key, uint8_t t
             if(!try_upgrade_reverse_order_DLock(cur, par, thread_id)) {
                 return parallel_insert_full_tree_DLock(root, key, thread_id);
             }
-            split_node_DLock(cur, par, thread_id);
+            if(!split_node_DLock(cur, par, thread_id)) {
+                write_unlock(&cur->mtx);
+            }
+            else {
+                deletepnode(cur);
+            }
             write_unlock(&par->mtx);
-            write_unlock(&cur->mtx);
             return parallel_insert_full_tree_DLock(root, key, thread_id);
         }
         int branch = query_branch_node(&cur->fusion_internal_tree, key);
@@ -380,7 +398,7 @@ void parallel_insert_full_tree_DLock(fusion_b_node* root, __m512i key, uint8_t t
             write_unlock(&cur->mtx);
             return;
         }
-        fusion_b_node* nchild = cur->children[branch];
+        parallel_fusion_b_node* nchild = cur->children[branch];
         if(!read_lock(&nchild->mtx, TRY_ONCE_LOCK, thread_id)) {
             read_unlock(&par->mtx, thread_id);
             read_unlock(&cur->mtx, thread_id);
@@ -393,10 +411,10 @@ void parallel_insert_full_tree_DLock(fusion_b_node* root, __m512i key, uint8_t t
 }
 
 
-__m512i* parallel_successor_DLock(fusion_b_node* root, __m512i key, uint8_t thread_id) { //returns null if there is no successor
+__m512i* parallel_successor_DLock(parallel_fusion_b_node* root, __m512i key, uint8_t thread_id) { //returns null if there is no successor
     __m512i* retval = NULL;
-    fusion_b_node* cur = root;
-    fusion_b_node* par = NULL;
+    parallel_fusion_b_node* cur = root;
+    parallel_fusion_b_node* par = NULL;
     read_lock(&cur->mtx, WAIT_FOR_LOCK, thread_id);
     int branch = query_branch_node(&cur->fusion_internal_tree, key);
     if(branch < 0) {
@@ -440,10 +458,10 @@ __m512i* parallel_successor_DLock(fusion_b_node* root, __m512i key, uint8_t thre
     }   
 }
 
-__m512i* parallel_predecessor_DLock(fusion_b_node* root, __m512i key, uint8_t thread_id) { //returns null if there is no successor
+__m512i* parallel_predecessor_DLock(parallel_fusion_b_node* root, __m512i key, uint8_t thread_id) { //returns null if there is no successor
     __m512i* retval = NULL;
-    fusion_b_node* cur = root;
-    fusion_b_node* par = NULL;
+    parallel_fusion_b_node* cur = root;
+    parallel_fusion_b_node* par = NULL;
     read_lock(&cur->mtx, WAIT_FOR_LOCK, thread_id);
     int branch = query_branch_node(&cur->fusion_internal_tree, key);
     if(branch < 0) {

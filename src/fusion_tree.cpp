@@ -595,11 +595,6 @@ int insert_fast(fusion_node* node, __m512i key) {
 }
 
 int query_branch_node(fusion_node* node, __m512i key) {
-	//cout << (int) node->tree.meta.size << endl;
-	//cout << "WTF2, file: " <<  file << ", line: " << line << ", fast: " <<node->tree.meta.fast << endl;
-	// if(node->tree.meta.size == 0) {
-	// 	cout << "WTF, file: " <<  file << ", line: " << line << ", fast: " <<node->tree.meta.fast << endl;
-	// }
 	if(node->tree.meta.fast) {
 		return query_branch_fast(node, key);
 	}

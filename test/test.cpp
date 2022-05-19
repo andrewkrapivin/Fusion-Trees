@@ -88,13 +88,13 @@ int main(){
     mt19937 generator (seed);
 
     //return 0;
-    
+     
     constexpr long long bigtestsize = 10000000;
     __m512i* big_randomlist = static_cast<__m512i*>(std::aligned_alloc(64, bigtestsize*64));
     uint64_t* small_randomlist = (uint64_t*)malloc(bigtestsize*sizeof(uint64_t));
     set<uint64_t> list_set;
     boost::container::set<uint64_t> boost_set;
-    FusionBTree ft();
+    FusionBTree ft;
     for(int i=0; i < bigtestsize; i++) {
     	big_randomlist[i] = gen_random_vec(generator);
         small_randomlist[i] = gen_random_uint64(generator);
@@ -176,7 +176,7 @@ int main(){
 
 
     for(int i=0; i < bigtestsize-1; i++) {
-    	__m512i* treesucc = ft.successor(root, big_randomlist[i]);
+    	__m512i* treesucc = ft.successor(big_randomlist[i]);
     	if(treesucc == NULL){
     		cout << "treesuc is NULL" << endl;
             break;
