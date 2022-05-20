@@ -19,6 +19,7 @@
 #include "../src/fusion_tree.h"
 #include "../src/HelperFuncs.h"
 #include "../src/FusionBTree.h"
+#include "../src/VariableSizeFusionBTree.h"
 #include "../src/FusionQSort.h"
 #include "../src/lock.h"
 
@@ -114,9 +115,14 @@ int main(int argc, char** argv) {
     mt19937 generator (2);
     parallel_fusion_b_node* root = new parallel_fusion_b_node();
     rw_lock_init(&root->mtx);
+    cout << sizeof(fusion_metadata) << endl;
+    cout << sizeof(fusion_tree) << endl;
+    cout << sizeof(fusion_node) << endl;
     cout << sizeof(parallel_fusion_b_node) << endl;
+    cout << sizeof(struct vsize_parallel_fusion_b_leaf<uint64_t>) << endl;
     cout << sizeof(pnodetest1) << endl;
     cout << sizeof(pnodetest2) << endl;
+    cout << sizeof(ReaderWriterLock) << endl;
 
     size_t bigtestsize = 30;
     if(argc >= 2)

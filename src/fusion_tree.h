@@ -12,8 +12,8 @@ typedef struct {
 	uint8_t size;
 	bool fast;
 	bool leaf;
-	uint16_t fullkey; //each bit says whether a particular key is a "full" key, or that the key stored here stands for an entire key rather than a part of a key
 	uint8_t remaining[3];
+	uint16_t fullkey; //each bit says whether a particular key is a "full" key, or that the key stored here stands for an entire key rather than a part of a key
 } fusion_metadata;
 
 typedef struct {

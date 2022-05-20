@@ -410,7 +410,7 @@ void parallel_insert_full_tree_DLock(parallel_fusion_b_node* root, __m512i key, 
     }
 }
 
-
+//Is this function even tested?
 __m512i* parallel_successor_DLock(parallel_fusion_b_node* root, __m512i key, uint8_t thread_id) { //returns null if there is no successor
     __m512i* retval = NULL;
     parallel_fusion_b_node* cur = root;
@@ -458,6 +458,7 @@ __m512i* parallel_successor_DLock(parallel_fusion_b_node* root, __m512i key, uin
     }   
 }
 
+//This function is 100% not tested, kinda just copied and modified successor
 __m512i* parallel_predecessor_DLock(parallel_fusion_b_node* root, __m512i key, uint8_t thread_id) { //returns null if there is no successor
     __m512i* retval = NULL;
     parallel_fusion_b_node* cur = root;
@@ -479,7 +480,7 @@ __m512i* parallel_predecessor_DLock(parallel_fusion_b_node* root, __m512i key, u
     
     if(!read_lock(&cur->mtx, TRY_ONCE_LOCK, thread_id)) {
         read_unlock(&par->mtx, thread_id);
-        return parallel_successor_DLock(root, key, thread_id);
+        return parallel_predecessor_DLock(root, key, thread_id);
     }
     while(true) { //assumes par and cur exist and are locked according to the paradigm.
         int branch = query_branch_node(&cur->fusion_internal_tree, key);
@@ -497,7 +498,7 @@ __m512i* parallel_predecessor_DLock(parallel_fusion_b_node* root, __m512i key, u
         if(!read_lock(&cur->children[branch]->mtx, TRY_ONCE_LOCK, thread_id)) {
             read_unlock(&par->mtx, thread_id);
             read_unlock(&cur->mtx, thread_id);
-            return parallel_successor_DLock(root, key, thread_id);
+            return parallel_predecessor_DLock(root, key, thread_id);
         }
         read_unlock(&par->mtx, thread_id);
         par = cur;
