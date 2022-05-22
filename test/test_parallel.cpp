@@ -89,24 +89,35 @@ void print_node_info(fusion_node& test_node) {
 }
 
 void parallel_insert_items(parallel_fusion_b_node* root, __m512i items[], size_t num, string path, uint8_t id) {
-    cout << "path is: " << path << endl;
-    ofstream fout(path);
+    // cout << "path is: " << path << endl;
+    // ofstream fout(path);
     ParallelFusionBTree pft(root, id);
     for(size_t i = 0; i < num; i++) {
         pft.insert(items[i]);
     }
-    fout.close();
+    // fout.close();
 }
 
 void parallel_succ_items(parallel_fusion_b_node* root, __m512i items[], size_t num, string path, uint8_t id) {
-    cout << "path is: " << path << endl;
-    ofstream fout(path);
+    // cout << "path is: " << path << endl;
+    // ofstream fout(path);
     ParallelFusionBTree pft(root, id);
     for(size_t i = 0; i < num; i++) {
         __m512i* test = pft.successor(items[i]);
         assert(i >=num-2 || first_diff_bit_pos(*test, items[i+1]) == -1);
     }
-    fout.close();
+    // fout.close();
+}
+
+void parallel_pred_items(parallel_fusion_b_node* root, __m512i items[], size_t num, string path, uint8_t id) {
+    // cout << "path is: " << path << endl;
+    // ofstream fout(path);
+    ParallelFusionBTree pft(root, id);
+    for(size_t i = 0; i < num; i++) {
+        __m512i* test = pft.predecessor(items[i]);
+        assert(i == 0 || first_diff_bit_pos(*test, items[i-1]) == -1);
+    }
+    // fout.close();
 }
 
 int main(int argc, char** argv) {
@@ -186,4 +197,22 @@ int main(int argc, char** argv) {
     end = chrono::high_resolution_clock::now();
     duration = chrono::duration_cast<chrono::microseconds>(end-start);
     cout << "Time to parallel retrieve sorted list with fusion tree multi threaded: " << duration.count() << endl;
+
+    
+    start = chrono::high_resolution_clock::now();
+    //Figure out how to test this
+    threads.clear();
+    for(size_t i = 0; i < numThreads; i++) {
+        // threads.push_back(std::thread(parallel_insert_items, root, big_randomlist+indices[i], indices[i+1]-indices[i], argv[3+i]));
+        threads.push_back(std::thread(parallel_pred_items, root, big_randomlist+indices[i], indices[i+1]-indices[i], argv[3+i], i));
+    }
+
+    for(auto& th: threads) {
+        th.join();
+    }
+
+    // cout << "random seed is " << seed << endl;
+    end = chrono::high_resolution_clock::now();
+    duration = chrono::duration_cast<chrono::microseconds>(end-start);
+    cout << "Time to parallel retrieve 'reverse' list with fusion tree multi threaded: " << duration.count() << endl;
 }

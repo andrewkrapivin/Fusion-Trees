@@ -261,11 +261,13 @@ parallel_fusion_b_node::~parallel_fusion_b_node() {
     pc_destructor(&mtx.pc_counter);
 }
 
+typedef BTState<parallel_fusion_b_node> PBState;
+
 //keep track of how many times we "restart" in the tree
 void parallel_insert_full_tree_DLock(parallel_fusion_b_node* root, __m512i key, uint8_t thread_id) {
     // assert(root != NULL);
 
-    BTState<parallel_fusion_b_node> state(root, thread_id);
+    PBState state(root, thread_id);
 
     while(true) {
         if(state.split_if_needed<>()) {
@@ -291,96 +293,48 @@ void parallel_insert_full_tree_DLock(parallel_fusion_b_node* root, __m512i key, 
 
 __m512i* parallel_successor_DLock(parallel_fusion_b_node* root, __m512i key, uint8_t thread_id) { //returns null if there is no successor
     __m512i* retval = NULL;
-    parallel_fusion_b_node* cur = root;
-    parallel_fusion_b_node* par = NULL;
-    read_lock(&cur->mtx, WAIT_FOR_LOCK, thread_id);
-    int branch = query_branch_node(&cur->fusion_internal_tree, key);
-    if(branch < 0) {
-        branch = (~branch) + 1;
-    }
-    if(cur->fusion_internal_tree.tree.meta.size > branch) {
-        retval = &cur->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&cur->fusion_internal_tree, branch)];
-    }
-    if(cur->children[branch] == NULL) {
-        read_unlock(&cur->mtx, thread_id);
-        return retval;
-    }
-    par = cur;
-    cur = par->children[branch];
+    PBState state(root, thread_id);
     
-    if(!read_lock(&cur->mtx, TRY_ONCE_LOCK, thread_id)) {
-        read_unlock(&par->mtx, thread_id);
-        return parallel_successor_DLock(root, key, thread_id);
-    }
-    while(true) { //assumes par and cur exist and are locked according to the paradigm.
-        int branch = query_branch_node(&cur->fusion_internal_tree, key);
+    while(true) {
+        int branch = query_branch_node(&state.cur->fusion_internal_tree, key);
         if(branch < 0) {
             branch = (~branch) + 1;
         }
-        if(cur->fusion_internal_tree.tree.meta.size > branch) {
-            retval = &cur->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&cur->fusion_internal_tree, branch)];
+        if(state.cur->fusion_internal_tree.tree.meta.size > branch) {
+            retval = &state.cur->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&state.cur->fusion_internal_tree, branch)];
         }
-        if(cur->children[branch] == NULL) {
-            read_unlock(&par->mtx, thread_id);
-            read_unlock(&cur->mtx, thread_id);
+        if(state.cur->children[branch] == NULL) {
+            state.read_unlock_both();
             return retval;
         }
-        if(!read_lock(&cur->children[branch]->mtx, TRY_ONCE_LOCK, thread_id)) {
-            read_unlock(&par->mtx, thread_id);
-            read_unlock(&cur->mtx, thread_id);
+
+        if(!state.try_HOH_readlock(state.cur->children[branch])) {
             return parallel_successor_DLock(root, key, thread_id);
         }
-        read_unlock(&par->mtx, thread_id);
-        par = cur;
-        cur = cur->children[branch];
-    }   
+    }
 }
 
 __m512i* parallel_predecessor_DLock(parallel_fusion_b_node* root, __m512i key, uint8_t thread_id) { //returns null if there is no successor
     __m512i* retval = NULL;
-    parallel_fusion_b_node* cur = root;
-    parallel_fusion_b_node* par = NULL;
-    read_lock(&cur->mtx, WAIT_FOR_LOCK, thread_id);
-    int branch = query_branch_node(&cur->fusion_internal_tree, key);
-    if(branch < 0) {
-        branch = (~branch);
-    }
-    if(branch > 0) {
-        retval = &cur->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&cur->fusion_internal_tree, branch-1)];
-    }
-    if(cur->children[branch] == NULL) {
-        read_unlock(&cur->mtx, thread_id);
-        return retval;
-    }
-    par = cur;
-    cur = par->children[branch];
-    
-    if(!read_lock(&cur->mtx, TRY_ONCE_LOCK, thread_id)) {
-        read_unlock(&par->mtx, thread_id);
-        return parallel_successor_DLock(root, key, thread_id);
-    }
-    while(true) { //assumes par and cur exist and are locked according to the paradigm.
-        int branch = query_branch_node(&cur->fusion_internal_tree, key);
+    PBState state(root, thread_id);
+
+    while(true) {
+        int branch = query_branch_node(&state.cur->fusion_internal_tree, key);
         if(branch < 0) {
             branch = (~branch);
         }
         if(branch > 0) {
-            retval = &cur->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&cur->fusion_internal_tree, branch-1)];
+            retval = &state.cur->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&state.cur->fusion_internal_tree, branch-1)];
         }
-        if(cur->children[branch] == NULL) {
-            read_unlock(&par->mtx, thread_id);
-            read_unlock(&cur->mtx, thread_id);
+        if(state.cur->children[branch] == NULL) {
+            state.read_unlock_both();
             return retval;
         }
-        if(!read_lock(&cur->children[branch]->mtx, TRY_ONCE_LOCK, thread_id)) {
-            read_unlock(&par->mtx, thread_id);
-            read_unlock(&cur->mtx, thread_id);
-            return parallel_successor_DLock(root, key, thread_id);
+
+        if(!state.try_HOH_readlock(state.cur->children[branch])) {
+            return parallel_predecessor_DLock(root, key, thread_id);
         }
-        read_unlock(&par->mtx, thread_id);
-        par = cur;
-        cur = cur->children[branch];
-    }   
+    }
 }
 
 
