@@ -11,9 +11,8 @@ using namespace std; //maybe stop doing this. Ok definitely stop doing
 typedef struct {
 	uint8_t size;
 	bool fast;
-	bool leaf;
-	uint8_t remaining[3];
-	uint16_t fullkey; //each bit says whether a particular key is a "full" key, or that the key stored here stands for an entire key rather than a part of a key
+	uint8_t remaining[4];
+	uint16_t fullkey; //each bit says whether a particular key is a "full" key, or that the key stored here stands for an entire key rather than a part of a key. Basically if has an associated val
 } fusion_metadata;
 
 typedef struct {

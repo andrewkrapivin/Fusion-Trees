@@ -12,7 +12,7 @@ struct BTState {
     // template<bool HP>
     // static void emptyfunc(NT* cur, NT* lc, NT* rc) {
     // }
-    static void emptyfunc(NT* cur, NT* lc, NT* rc) {
+    static void emptyfunc(NT* par, NT* cur, NT* lc, NT* rc, int medpos, fusion_metadata old_meta) {
     }
 
     NT* cur;
@@ -30,8 +30,10 @@ struct BTState {
     bool try_upgrade_reverse_order(); //Honestly probably better (maybe a tiny bit less efficient but w/ modern compilers who knows?) to not bother with the templating. Makes much nicer code
     void read_unlock_both();
     void write_unlock_both();
-    template<void (*ETS)(NT*, NT*, NT*) = emptyfunc> bool split_node(); //splits node and in the middle does extra splitting
-    template<void (*ETS)(NT*, NT*, NT*) = emptyfunc> bool split_if_needed(); //returns true if needed to split, false if did not
+    // template<> 
+    bool split_node(void ETS(NT*, NT*, NT*, NT*, int, fusion_metadata) = emptyfunc); //splits node and in the middle does extra splitting
+    // template<void ETS(NT*, NT*, NT*, NT*, int, fusion_metadata) = emptyfunc> 
+    bool split_if_needed(void ETS(NT*, NT*, NT*, NT*, int, fusion_metadata) = emptyfunc); //returns true if needed to split, false if did not
     // template<void (*ETS)(NT*, NT*, NT*) = [](NT* cur, NT* lc, NT* rc) -> void {}> bool split_node(); //Why this lambda function not compiling?
     // template<void (*ETS)(NT*, NT*, NT*) = [](NT* cur, NT* lc, NT* rc) -> void {}> bool split_if_needed();
     bool try_insert_key(__m512i key);
@@ -83,8 +85,8 @@ void BTState<NT>::write_unlock_both() {
 }
 
 template<typename NT>
-template<void (*ETS)(NT*, NT*, NT*)>
-bool BTState<NT>::split_node() {
+// template<void ETS(NT*, NT*, NT*, NT*, int, fusion_metadata)> //Why does this templated version not work??? It should...
+bool BTState<NT>::split_node(void ETS(NT*, NT*, NT*, NT*, int, fusion_metadata)) {
     fusion_node* key_fnode = &cur->fusion_internal_tree;
 
     NT* newlefthalf = new NT();
@@ -107,15 +109,16 @@ bool BTState<NT>::split_node() {
         make_fast(&newrighthalf->fusion_internal_tree);
     }
 
-    ETS(cur, newlefthalf, newrighthalf);
-
     __m512i median = get_key_from_sorted_pos(&cur->fusion_internal_tree, medpos);
+    fusion_metadata old_meta = cur->fusion_internal_tree.tree.meta;
 
     if(par == NULL) {
         memset(&cur->fusion_internal_tree, 0, sizeof(fusion_node) + sizeof(NT*)*(MAX_FUSION_SIZE+1));
         insert_key_node(&cur->fusion_internal_tree, median);
+        make_fast(&cur->fusion_internal_tree);
         cur->children[0] = newlefthalf;
         cur->children[1] = newrighthalf;
+        ETS(par, cur, newlefthalf, newrighthalf, 0, old_meta);
         return false;
     }
 
@@ -126,17 +129,18 @@ bool BTState<NT>::split_node() {
     }
     par->children[pos] = newlefthalf;
     par->children[pos+1] = newrighthalf;
+    ETS(par, cur, newlefthalf, newrighthalf, pos, old_meta);
     return true;
 }
 
 template<typename NT>
-template<void (*ETS)(NT*, NT*, NT*)>
-bool BTState<NT>::split_if_needed() {
+// template<void ETS(NT*, NT*, NT*, NT*, int, fusion_metadata)>
+bool BTState<NT>::split_if_needed(void ETS(NT*, NT*, NT*, NT*, int, fusion_metadata)) {
     if(node_full(&cur->fusion_internal_tree)) {
         if(!try_upgrade_reverse_order()) { //Somewhat misleading but basically to tell you that you need to restart the inserting process
             return true;
         }
-        if(!split_node<ETS>()) { //Return statement is just equal to par != NULL so maybe don't bother with this return statement? Can simplfiy ex next couple lines?
+        if(!split_node(ETS)) { //Return statement is just equal to par != NULL so maybe don't bother with this return statement? Can simplfiy ex next couple lines?
             write_unlock(&cur->mtx);
         }
         else {

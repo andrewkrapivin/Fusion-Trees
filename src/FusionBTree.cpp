@@ -270,7 +270,7 @@ void parallel_insert_full_tree_DLock(parallel_fusion_b_node* root, __m512i key, 
     PBState state(root, thread_id);
 
     while(true) {
-        if(state.split_if_needed<>()) {
+        if(state.split_if_needed()) {
             return parallel_insert_full_tree_DLock(root, key, thread_id);
         }
         int branch = query_branch_node(&state.cur->fusion_internal_tree, key);
@@ -298,8 +298,6 @@ __m512i* parallel_successor_DLock(parallel_fusion_b_node* root, __m512i key, uin
     while(true) {
         int branch = query_branch_node(&state.cur->fusion_internal_tree, key);
         if(branch < 0) {
- 2 files changed, 59 insertions(+), 76 deletions(-)
-
             branch = (~branch) + 1;
         }
         if(state.cur->fusion_internal_tree.tree.meta.size > branch) {

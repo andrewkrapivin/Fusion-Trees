@@ -130,7 +130,7 @@ int main(int argc, char** argv) {
     cout << sizeof(fusion_tree) << endl;
     cout << sizeof(fusion_node) << endl;
     cout << sizeof(parallel_fusion_b_node) << endl;
-    cout << sizeof(struct vsize_parallel_fusion_b_leaf<uint64_t>) << endl;
+    cout << sizeof(struct vsize_parallel_fusion_b_node<uint64_t>) << endl;
     cout << sizeof(pnodetest1) << endl;
     cout << sizeof(pnodetest2) << endl;
     cout << sizeof(ReaderWriterLock) << endl;
