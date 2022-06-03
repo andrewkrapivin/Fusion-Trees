@@ -123,7 +123,7 @@ void parallel_pred_items(parallel_fusion_b_node* root, __m512i items[], size_t n
 
 int main(int argc, char** argv) {
     unsigned seed = chrono::steady_clock::now().time_since_epoch().count();
-    mt19937 generator (2);
+    mt19937 generator (seed);
     parallel_fusion_b_node* root = new parallel_fusion_b_node();
     rw_lock_init(&root->mtx);
     cout << sizeof(fusion_metadata) << endl;

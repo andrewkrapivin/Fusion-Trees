@@ -12,6 +12,7 @@
 
 //maybe do like numbranches macro defined as max_fusion_size+1 to make things a bit nicer?
 
+//Make the fusion_internal_tree packed 
 typedef struct fusion_b_node {
 	fusion_node fusion_internal_tree;
 	fusion_b_node* children[MAX_FUSION_SIZE+1];

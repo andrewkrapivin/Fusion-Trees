@@ -1,11 +1,12 @@
 CXX = g++-11
-CXXFLAGS = -pthread -MMD -march=icelake-client -std=c++20 -O3
+CXXFLAGS = -pthread -MMD -MP -march=icelake-client -std=c++20
  
 SRCDIR = src
 OBJDIR = bin
 TESTDIR = test
 TARGET = $(OBJDIR)/fusion_tree_test
 TARGET_PARALLEL = $(OBJDIR)/parallel_fusion_tree_test
+TARGET_VSIZE_PARALLEL = $(OBJDIR)/vsize_fusion_tree_test
 
 
 src = $(wildcard $(SRCDIR)/*.cpp)
@@ -19,6 +20,7 @@ all:
 	
 	make $(TARGET)
 	make $(TARGET_PARALLEL)
+	make $(TARGET_VSIZE_PARALLEL)
 
 test:
 	mkdir -p bin \
@@ -36,10 +38,16 @@ $(TARGET): test/test.o $(obj)
 $(TARGET_PARALLEL): test/test_parallel.o $(obj)
 	$(CXX) $(CXXFLAGS) $^ -o $@
 
+$(TARGET_VSIZE_PARALLEL): test/test_vsize.o $(obj)
+	$(CXX) $(CXXFLAGS) $^ -o $@
+
 test/test.o: test/test.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 test/test_parallel.o: test/test_parallel.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+test/test_vsize.o: test/test_vsize.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.cpp

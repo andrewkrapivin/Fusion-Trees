@@ -36,7 +36,7 @@ struct BTState {
     bool split_if_needed(void ETS(NT*, NT*, NT*, NT*, int, fusion_metadata) = emptyfunc); //returns true if needed to split, false if did not
     // template<void (*ETS)(NT*, NT*, NT*) = [](NT* cur, NT* lc, NT* rc) -> void {}> bool split_node(); //Why this lambda function not compiling?
     // template<void (*ETS)(NT*, NT*, NT*) = [](NT* cur, NT* lc, NT* rc) -> void {}> bool split_if_needed();
-    bool try_insert_key(__m512i key);
+    bool try_insert_key(__m512i key, bool auto_unlock = true);
     bool try_HOH_readlock(NT* child); //unlocks everything on failure
 };
 
@@ -155,10 +155,11 @@ bool BTState<NT>::split_if_needed(void ETS(NT*, NT*, NT*, NT*, int, fusion_metad
 
 template<typename NT>
 // template<bool HP>
-bool BTState<NT>::try_insert_key(__m512i key) {
+bool BTState<NT>::try_insert_key(__m512i key, bool auto_unlock) {
     if(try_upgrade_reverse_order()) {
         insert_key_node(&cur->fusion_internal_tree, key);
-        write_unlock_both();
+        if (auto_unlock)
+            write_unlock_both();
         return true;
     }
     return false;

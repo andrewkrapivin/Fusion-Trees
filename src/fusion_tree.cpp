@@ -436,6 +436,8 @@ int insert(fusion_node* node, __m512i key) {
 }
 
 int query_branch(fusion_node* node, __m512i key) {
+	if(node->tree.meta.size == 0) return 0;
+
 	uint16_t first_basemask = extract_bits(&node->tree, key);
 	
 	int first_guess_pos = search_pos_tree(node, first_basemask);
@@ -502,6 +504,8 @@ inline int search_partial_pos_tree2_fast(fusion_node* node, uint16_t basemask, i
 }
 
 int query_branch_fast(fusion_node* node, __m512i key) {
+	if(node->tree.meta.size == 0) return 0;
+
 	uint16_t first_basemask = extract_bits(&node->tree, key);
 	
 	int first_guess_pos = search_pos_tree_fast(node, first_basemask);
