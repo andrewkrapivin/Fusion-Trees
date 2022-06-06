@@ -16,7 +16,7 @@ int idc=0;
 template<typename VT>
 struct vsize_parallel_fusion_b_node {
     fusion_node fusion_internal_tree;
-	vsize_parallel_fusion_b_node* children[MAX_FUSION_SIZE+1];
+	// vsize_parallel_fusion_b_node* children[MAX_FUSION_SIZE+1];
     ReaderWriterLock mtx;
     VT vals[MAX_FUSION_SIZE];
     vsize_parallel_fusion_b_node* subtree_roots[MAX_FUSION_SIZE];

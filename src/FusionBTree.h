@@ -15,7 +15,7 @@
 //Make the fusion_internal_tree packed 
 typedef struct fusion_b_node {
 	fusion_node fusion_internal_tree;
-	fusion_b_node* children[MAX_FUSION_SIZE+1];
+	// fusion_b_node* children[MAX_FUSION_SIZE+1];
     fusion_b_node* parent;
     bool visited;
     uint64_t id;

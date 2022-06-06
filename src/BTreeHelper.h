@@ -91,8 +91,11 @@ template<typename NT>
 bool BTState<NT>::split_node(void ETS(NT*, NT*, NT*, NT*, int, fusion_metadata)) {
     fusion_node* key_fnode = &cur->fusion_internal_tree;
 
-    NT* newlefthalf = new NT();
-    NT* newrighthalf = new NT();
+    // NT* newlefthalf = new NT();
+    // NT* newrighthalf = new NT();
+    NT* newchildren = new NT[MAX_FUSION_SIZE+1];
+    newlefthalf = &newchildren[0];
+    newrighthalf = &newchildren[1];
 
     constexpr int medpos = MAX_FUSION_SIZE/2; //two choices since max size even: maybe randomize?
     for(int i = 0; i < medpos; i++) {
