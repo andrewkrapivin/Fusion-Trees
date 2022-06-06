@@ -34,9 +34,9 @@ extern const fusion_tree Empty_Fusion_Tree;
 //for now implementing this fast fusion tree as default, but maybe segment fusion tree into two pieces, cause they have different ways of searching, inserting
 typedef struct {
 	__m512i keys[MAX_FUSION_SIZE];
-	fusion_tree tree;
 	//also maybe add a vector for the free_positions to support deletions easily
 	//__m128i uselessdata;
+	fusion_tree tree;
 	__m256i ignore_mask; //idk what exactly to do with this
 	__m128i key_positions; //convert key position assuming sorted array to the real position in the keys array
 } fusion_node;
@@ -115,6 +115,6 @@ int insert_key_node(fusion_node* node, __m512i key);
 
 void print_keys_sig_bits(fusion_node* node);
 
-void split_u64_matched_to_keys(std::pair<fusion_node*, uint64_t*> source, std::pair<fusion_node*, uint64_t*> low, std::pair<fusion_node*, uint64_t*> high); //TODO
+// void split_u64_matched_to_keys(std::pair<fusion_node*, uint64_t*> source, std::pair<fusion_node*, uint64_t*> low, std::pair<fusion_node*, uint64_t*> high); //TODO
 
 #endif 

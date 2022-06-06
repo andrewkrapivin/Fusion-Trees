@@ -261,7 +261,7 @@ parallel_fusion_b_node::~parallel_fusion_b_node() {
     pc_destructor(&mtx.pc_counter);
 }
 
-typedef BTState<parallel_fusion_b_node> PBState;
+typedef BTState<parallel_fusion_b_node, false> PBState;
 
 //keep track of how many times we "restart" in the tree
 void parallel_insert_full_tree_DLock(parallel_fusion_b_node* root, __m512i key, uint8_t thread_id) {

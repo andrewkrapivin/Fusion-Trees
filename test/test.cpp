@@ -89,7 +89,7 @@ int main(){
 
     //return 0;
      
-    constexpr long long bigtestsize = 10000000;
+    constexpr long long bigtestsize = 1000000;
     __m512i* big_randomlist = static_cast<__m512i*>(std::aligned_alloc(64, bigtestsize*64));
     uint64_t* small_randomlist = (uint64_t*)malloc(bigtestsize*sizeof(uint64_t));
     set<uint64_t> list_set;

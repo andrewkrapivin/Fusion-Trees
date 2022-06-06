@@ -6,7 +6,7 @@
 
 //TODO: generalize this template for any kind of B-tree so that could do some comparative testing.
 
-template<typename NT> //NT--node type.
+template<typename NT, bool useLock = true> //NT--node type.
 //NT MUST have fusion_internal_tree, children, mtx somewhere in it. I don't know how to restrict it so that that is the case, but just this is a thing. Basically, it must be related to parallel_fusion_b_node, but it can also be the variable size one
 //Another thing that must be guaranteed, and this is definitely sus, is that we have the fusion node then the children arrayed next to each other in memory for clearing.
 //Honestly maybe figure out a better system for this
@@ -45,14 +45,16 @@ struct BTState {
 
 
 
-template<typename NT>
-BTState<NT>::BTState(NT* root, uint8_t thread_id): cur(root), par(NULL), thread_id(thread_id) {
-    read_lock(&cur->mtx, WAIT_FOR_LOCK, thread_id);
+template<typename NT, bool useLock>
+BTState<NT, useLock>::BTState(NT* root, uint8_t thread_id): cur(root), par(NULL), thread_id(thread_id) {
+    if constexpr (useLock)
+        read_lock(&cur->mtx, WAIT_FOR_LOCK, thread_id);
 }
 
-template<typename NT>
+template<typename NT, bool useLock>
 // template<bool HP>
-bool BTState<NT>::try_upgrade_reverse_order() {
+bool BTState<NT, useLock>::try_upgrade_reverse_order() {
+    if constexpr (!useLock) return true;
     if(!partial_upgrade(&cur->mtx, TRY_ONCE_LOCK, thread_id)) {
         // if(HP)
         if(par != NULL)
@@ -72,23 +74,25 @@ bool BTState<NT>::try_upgrade_reverse_order() {
     return true;
 }
 
-template<typename NT>
+template<typename NT, bool useLock>
 // template<bool HP>
-void BTState<NT>::read_unlock_both() {
+void BTState<NT, useLock>::read_unlock_both() {
+    if constexpr (!useLock) return;
     read_unlock(&cur->mtx, thread_id);
     if(par != NULL) read_unlock(&par->mtx, thread_id);
 }
 
-template<typename NT>
+template<typename NT, bool useLock>
 // template<bool HP>
-void BTState<NT>::write_unlock_both() {
+void BTState<NT, useLock>::write_unlock_both() {
+    if constexpr (!useLock) return;
     write_unlock(&cur->mtx);
     if(par != NULL) write_unlock(&par->mtx);
 }
 
-template<typename NT>
+template<typename NT, bool useLock>
 // template<void ETS(NT*, NT*, NT*, NT*, int, fusion_metadata)> //Why does this templated version not work??? It should...
-bool BTState<NT>::split_node(void ETS(NT*, NT*, NT*, NT*, int, fusion_metadata)) {
+bool BTState<NT, useLock>::split_node(void ETS(NT*, NT*, NT*, NT*, int, fusion_metadata)) {
     fusion_node* key_fnode = &cur->fusion_internal_tree;
 
     NT* newlefthalf = new NT();
@@ -135,9 +139,9 @@ bool BTState<NT>::split_node(void ETS(NT*, NT*, NT*, NT*, int, fusion_metadata))
     return true;
 }
 
-template<typename NT>
+template<typename NT, bool useLock>
 // template<void ETS(NT*, NT*, NT*, NT*, int, fusion_metadata)>
-bool BTState<NT>::split_if_needed(void ETS(NT*, NT*, NT*, NT*, int, fusion_metadata)) {
+bool BTState<NT, useLock>::split_if_needed(void ETS(NT*, NT*, NT*, NT*, int, fusion_metadata)) {
     if(node_full(&cur->fusion_internal_tree)) {
         if(!try_upgrade_reverse_order()) { //Somewhat misleading but basically to tell you that you need to restart the inserting process
             return true;
@@ -155,9 +159,9 @@ bool BTState<NT>::split_if_needed(void ETS(NT*, NT*, NT*, NT*, int, fusion_metad
     return false; //Tells you split was unnecessary
 }
 
-template<typename NT>
+template<typename NT, bool useLock>
 // template<bool HP>
-bool BTState<NT>::try_insert_key(__m512i key, bool auto_unlock) {
+bool BTState<NT, useLock>::try_insert_key(__m512i key, bool auto_unlock) {
     if(try_upgrade_reverse_order()) {
         insert_key_node(&cur->fusion_internal_tree, key);
         if (auto_unlock)
@@ -167,9 +171,9 @@ bool BTState<NT>::try_insert_key(__m512i key, bool auto_unlock) {
     return false;
 }
 
-template<typename NT>
+template<typename NT, bool useLock>
 // template<bool HP>
-bool BTState<NT>::try_HOH_readlock(NT* child) {
+bool BTState<NT, useLock>::try_HOH_readlock(NT* child) {
     if(!read_lock(&child->mtx, TRY_ONCE_LOCK, thread_id)) {
         read_unlock_both();
         return false;
