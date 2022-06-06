@@ -105,7 +105,7 @@ void parallel_succ_items(parallel_fusion_b_node* root, __m512i items[], size_t n
     ParallelFusionBTree pft(root, id);
     for(size_t i = 0; i < num; i++) {
         __m512i* test = pft.successor(items[i]);
-        assert(i >=num-2 || first_diff_bit_pos(*test, items[i+1]) == -1);
+        // assert(i >=num-2 || first_diff_bit_pos(*test, items[i+1]) == -1);
     }
     // fout.close();
 }
@@ -116,7 +116,7 @@ void parallel_pred_items(parallel_fusion_b_node* root, __m512i items[], size_t n
     ParallelFusionBTree pft(root, id);
     for(size_t i = 0; i < num; i++) {
         __m512i* test = pft.predecessor(items[i]);
-        assert(i == 0 || first_diff_bit_pos(*test, items[i-1]) == -1);
+        // assert(i == 0 || first_diff_bit_pos(*test, items[i-1]) == -1);
     }
     // fout.close();
 }
@@ -171,11 +171,11 @@ int main(int argc, char** argv) {
     auto duration = chrono::duration_cast<chrono::microseconds>(end-start);
     cout << "Time to insert: " << duration.count() << endl;
 
-    start = chrono::high_resolution_clock::now();
-    sort(big_randomlist, big_randomlist+bigtestsize, fast_compare__m512i);
-    end = chrono::high_resolution_clock::now();
-    duration = chrono::duration_cast<chrono::microseconds>(end-start);
-    cout << "Time to sort with std::sort: " << duration.count() << endl;
+    // start = chrono::high_resolution_clock::now();
+    // sort(big_randomlist, big_randomlist+bigtestsize, fast_compare__m512i);
+    // end = chrono::high_resolution_clock::now();
+    // duration = chrono::duration_cast<chrono::microseconds>(end-start);
+    // cout << "Time to sort with std::sort: " << duration.count() << endl;
 
     // __m512i prev = {0};
     // start = chrono::high_resolution_clock::now();

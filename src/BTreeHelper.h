@@ -4,6 +4,8 @@
 #include "lock.h"
 #include "fusion_tree.h"
 
+//TODO: generalize this template for any kind of B-tree so that could do some comparative testing.
+
 template<typename NT> //NT--node type.
 //NT MUST have fusion_internal_tree, children, mtx somewhere in it. I don't know how to restrict it so that that is the case, but just this is a thing. Basically, it must be related to parallel_fusion_b_node, but it can also be the variable size one
 //Another thing that must be guaranteed, and this is definitely sus, is that we have the fusion node then the children arrayed next to each other in memory for clearing.

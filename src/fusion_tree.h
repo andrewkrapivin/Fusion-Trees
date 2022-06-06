@@ -115,4 +115,6 @@ int insert_key_node(fusion_node* node, __m512i key);
 
 void print_keys_sig_bits(fusion_node* node);
 
+void split_u64_matched_to_keys(std::pair<fusion_node*, uint64_t*> source, std::pair<fusion_node*, uint64_t*> low, std::pair<fusion_node*, uint64_t*> high); //TODO
+
 #endif 
