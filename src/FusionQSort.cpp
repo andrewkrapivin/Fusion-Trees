@@ -13,9 +13,9 @@ void FusionQSort(__m512i arr[], size_t length) {
         return;
     }
 
-    std::sort(arr, arr+67, compare__m512i);
+    std::sort(arr, arr+MAX_FUSION_SIZE*5, compare__m512i);
     
-    for(size_t i = 3, j=0; i < 65; i+=4, j++) {
+    for(size_t i = 2, j=0; i < MAX_FUSION_SIZE*5; i+=5, j++) {
         swap(arr[i], arr[j]);
     }
 

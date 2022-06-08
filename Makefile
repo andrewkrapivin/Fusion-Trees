@@ -7,6 +7,7 @@ TESTDIR = test
 TARGET = $(OBJDIR)/fusion_tree_test
 TARGET_PARALLEL = $(OBJDIR)/parallel_fusion_tree_test
 TARGET_VSIZE_PARALLEL = $(OBJDIR)/vsize_fusion_tree_test
+TARGET_ILP = $(OBJDIR)/testILP
 
 
 src = $(wildcard $(SRCDIR)/*.cpp)
@@ -32,6 +33,16 @@ parallel_test:
 	
 	make $(TARGET_PARALLEL)
 
+vsize_parallel_test:
+	mkdir -p bin \
+	
+	make $(TARGET_VSIZE_PARALLEL)
+
+testILP:
+	mkdir -p bin \
+	
+	make $(TARGET_ILP)
+
 $(TARGET): test/test.o $(obj)
 	$(CXX) $(CXXFLAGS) $^ -o $@
 
@@ -39,6 +50,9 @@ $(TARGET_PARALLEL): test/test_parallel.o $(obj)
 	$(CXX) $(CXXFLAGS) $^ -o $@
 
 $(TARGET_VSIZE_PARALLEL): test/test_vsize.o $(obj)
+	$(CXX) $(CXXFLAGS) $^ -o $@
+	
+$(TARGET_ILP): test/testILP.o $(obj)
 	$(CXX) $(CXXFLAGS) $^ -o $@
 
 test/test.o: test/test.cpp
@@ -48,6 +62,9 @@ test/test_parallel.o: test/test_parallel.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 test/test_vsize.o: test/test_vsize.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+test/testILP.o: test/testILP.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.cpp

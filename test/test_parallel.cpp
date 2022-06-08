@@ -61,7 +61,7 @@ int main(int argc, char** argv) {
     unsigned seed = chrono::steady_clock::now().time_since_epoch().count();
     mt19937 generator (seed);
     parallel_fusion_b_node* root = new parallel_fusion_b_node();
-    rw_lock_init(&root->mtx);
+    // rw_lock_init(&root->mtx);
 
     size_t bigtestsize = 30;
     if(argc >= 2)

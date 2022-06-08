@@ -54,40 +54,44 @@ BTState<NT, useLock>::BTState(NT* root, uint8_t thread_id): cur(root), par(NULL)
 template<typename NT, bool useLock>
 // template<bool HP>
 bool BTState<NT, useLock>::try_upgrade_reverse_order() {
-    if constexpr (!useLock) return true;
-    if(!partial_upgrade(&cur->mtx, TRY_ONCE_LOCK, thread_id)) {
-        // if(HP)
-        if(par != NULL)
-            read_unlock(&par->mtx, thread_id);
-        return false;
-    }
-    if (par == NULL) {
+    if constexpr (useLock) {
+        if(!partial_upgrade(&cur->mtx, TRY_ONCE_LOCK, thread_id)) {
+            // if(HP)
+            if(par != NULL)
+                read_unlock(&par->mtx, thread_id);
+            return false;
+        }
+        if (par == NULL) {
+            finish_partial_upgrade(&cur->mtx);
+            return true;
+        }
+        if(!partial_upgrade(&par->mtx, TRY_ONCE_LOCK, thread_id)) {
+            unlock_partial_upgrade(&cur->mtx);
+            return false;
+        }
+        finish_partial_upgrade(&par->mtx);
         finish_partial_upgrade(&cur->mtx);
         return true;
     }
-    if(!partial_upgrade(&par->mtx, TRY_ONCE_LOCK, thread_id)) {
-        unlock_partial_upgrade(&cur->mtx);
-        return false;
-    }
-    finish_partial_upgrade(&par->mtx);
-    finish_partial_upgrade(&cur->mtx);
     return true;
 }
 
 template<typename NT, bool useLock>
 // template<bool HP>
 void BTState<NT, useLock>::read_unlock_both() {
-    if constexpr (!useLock) return;
-    read_unlock(&cur->mtx, thread_id);
-    if(par != NULL) read_unlock(&par->mtx, thread_id);
+    if constexpr (useLock) {
+        read_unlock(&cur->mtx, thread_id);
+        if(par != NULL) read_unlock(&par->mtx, thread_id);
+    }
 }
 
 template<typename NT, bool useLock>
 // template<bool HP>
 void BTState<NT, useLock>::write_unlock_both() {
-    if constexpr (!useLock) return;
-    write_unlock(&cur->mtx);
-    if(par != NULL) write_unlock(&par->mtx);
+    if constexpr (useLock) {
+        write_unlock(&cur->mtx);
+        if(par != NULL) write_unlock(&par->mtx);
+    }
 }
 
 template<typename NT, bool useLock>
@@ -147,13 +151,15 @@ bool BTState<NT, useLock>::split_if_needed(void ETS(NT*, NT*, NT*, NT*, int, fus
             return true;
         }
         if(!split_node(ETS)) { //Return statement is just equal to par != NULL so maybe don't bother with this return statement? Can simplfiy ex next couple lines?
-            write_unlock(&cur->mtx);
+            if constexpr (useLock) 
+                write_unlock(&cur->mtx);
         }
         else {
             delete cur;
         }
-        if(par != NULL)
-            write_unlock(&par->mtx);
+        if constexpr (useLock)
+            if(par != NULL)
+                write_unlock(&par->mtx);
         return true;
     }
     return false; //Tells you split was unnecessary
@@ -174,12 +180,14 @@ bool BTState<NT, useLock>::try_insert_key(__m512i key, bool auto_unlock) {
 template<typename NT, bool useLock>
 // template<bool HP>
 bool BTState<NT, useLock>::try_HOH_readlock(NT* child) {
-    if(!read_lock(&child->mtx, TRY_ONCE_LOCK, thread_id)) {
-        read_unlock_both();
-        return false;
+    if constexpr (useLock) {
+        if(!read_lock(&child->mtx, TRY_ONCE_LOCK, thread_id)) {
+            read_unlock_both();
+            return false;
+        }
+        if(par != NULL)
+            read_unlock(&par->mtx, thread_id);
     }
-    if(par != NULL)
-        read_unlock(&par->mtx, thread_id);
     par = cur;
     cur = child;
     return true;

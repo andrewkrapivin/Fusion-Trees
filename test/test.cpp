@@ -84,11 +84,5 @@ int main(int argc, char** argv){
             assert(first_diff_bit_pos(prev, big_randomlist[i]) == -1);
         }
     }, "successor query on sorted list");
-
-    cout << "Num Nodes: " << ft.numNodes() << endl;
-    cout << "Total Depth: " << ft.totalDepth() << endl;
-    cout << "Mem usage: " << ft.memUsage() << endl;
-    cout << "max depth: " << ft.maxDepth() << endl;
-    cout << "random seed is " << seed << endl;
 }
 

@@ -16,9 +16,11 @@
 typedef struct fusion_b_node {
 	fusion_node fusion_internal_tree;
 	fusion_b_node* children[MAX_FUSION_SIZE+1];
-    fusion_b_node* parent;
-    bool visited;
-    uint64_t id;
+    // fusion_b_node* parent;
+    // bool visited;
+    // uint64_t id;
+
+    fusion_b_node();
 } fusion_b_node;
 
 typedef struct parallel_fusion_b_node {
@@ -29,14 +31,6 @@ typedef struct parallel_fusion_b_node {
     parallel_fusion_b_node();
     ~parallel_fusion_b_node();
 } parallel_fusion_b_node;
-
-// typedef struct parallel_fusion_b_leaf {
-//     fusion_node fusion_internal_tree;
-// 	parallel_fusion_b_node* children[MAX_FUSION_SIZE+1];
-//     ReaderWriterLock mtx;
-//     ReaderWriterLock mtx2;
-//     parallel_fusion_b_node* skip_nodes[MAX_FUSION_SIZE*2];
-// } parallel_fusion_b_leaf;
 
 // Implementation question: how to make these two data structures the same size? Since they have exactly the same data?
 // That is, how to make it so that like adding padding doesn't happen until the "end," only in the final data structure?
@@ -62,11 +56,6 @@ class FusionBTree {
         void insert(__m512i key);
         __m512i* successor(__m512i key);
         __m512i* predecessor(__m512i key);
-        void printTree();
-        int maxDepth();
-        size_t numNodes();
-        size_t totalDepth();
-        size_t memUsage();
 };
 
 class ParallelFusionBTree {
