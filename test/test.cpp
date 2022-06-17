@@ -56,6 +56,13 @@ int main(int argc, char** argv){
     }, "boost::container::set insert");
 
     bench.timeFunction([&] ()-> void {
+        for(int i=0; i < bigtestsize; i++) {
+            *ft.successor(big_randomlist[i]);
+            // assert(first_diff_bit_pos(prev, big_randomlist[i]) == -1);
+        }
+    }, "successor query on unsorted list");
+
+    bench.timeFunction([&] ()-> void {
         sort(big_randomlist, big_randomlist+bigtestsize, fast_compare__m512i);
     }, "sort on big keys");
 
@@ -64,6 +71,7 @@ int main(int argc, char** argv){
         size_t j = temporary_distribution(generator);
         swap(big_randomlist[i], big_randomlist[j]);
     }
+    
     bench.timeFunction([&] ()-> void{
         FusionQSort(big_randomlist, bigtestsize);
     }, "FusionQSort on big keys");

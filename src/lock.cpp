@@ -129,7 +129,8 @@ bool write_lock(ReaderWriterLock *rwlock, uint8_t flag) {
     if (__sync_lock_test_and_set(&rwlock->writer, 1))
       return false;
   } else {
-    while (__sync_lock_test_and_set(&rwlock->writer, 1))
+    while (__sync_lock_test_and_set(&rwlock->writer, 1)) //So it sets the val to one, and then if the val was already one, wait for the val to become 0 for the presumably other writer doing stuff to stop doing stuff.
+    //What's weird though is that __sync_lock_test_and_set is only an acquire memory barrier, so what about the releasing? Right cause you actually don't care when other people see your write, just you don't want reading the reader locks before this is committed.
       while (rwlock->writer != 0)
         ;
   }
