@@ -7,6 +7,8 @@
 #include "lock.h"
 #include "BTreeHelper.h"
 #include "HelperFuncs.h"
+#include "ThreadedIdGenerator.hpp"
+// #include "HashLocks.hpp"
 #include <thread>
 #include <fstream>
 #include <ostream>
@@ -25,6 +27,7 @@ struct vsize_parallel_fusion_b_node {
 
     vsize_parallel_fusion_b_node();
     ~vsize_parallel_fusion_b_node();
+    void deleteSubtrees();
     void ins_val(VT val, int pos);
     void ins_subtree(vsize_parallel_fusion_b_node<VT>* root, int pos);
     bool has_val(int pos);
@@ -67,17 +70,53 @@ using VSP_BTState = BTState<vsize_parallel_fusion_b_node<VT>>;
 template<typename VT>
 class VariableSizeParallelFusionBTree {
     private:
-        vsize_parallel_fusion_b_node<VT>* root;
-        int thread_id;
-        std::pair<VT, bool> new_root_pquery(VSP_BTState<VT> state, m512i_arr key, int branch);
-        std::pair<VT, bool> pquery(m512i_arr key, vsize_parallel_fusion_b_node<VT>* subroot);
+        vsize_parallel_fusion_b_node<VT> root;
+        ThreadedIdGenerator idgen;
+        // LockHashTable locks;
+        size_t numThreads;
+        void set_val_and_new_root(VSP_BTState<VT> state, m512i_arr key, VT val, int branch, size_t thread_id);
+        void insert(vsize_parallel_fusion_b_node<VT>* root, m512i_arr key, VT val, size_t threadId);
+        std::pair<VT, bool> new_root_pquery(VSP_BTState<VT> state, m512i_arr key, int branch, size_t threadId);
+        std::pair<VT, bool> pquery(m512i_arr key, vsize_parallel_fusion_b_node<VT>* subroot, size_t threadId);
 
     public:
-        VariableSizeParallelFusionBTree(vsize_parallel_fusion_b_node<VT>* root, int thread_id): root(root), thread_id(thread_id) {}
-        void insert(m512i_arr key, VT val);
-        std::pair<VT, bool> pquery(m512i_arr key); //returning VT and whether that is actually a valid value, ie whether the key is in the database
-        m512i_arr successor(m512i_arr key);
-        m512i_arr predecessor(m512i_arr key);
+        VariableSizeParallelFusionBTree(size_t numThreads);
+        ~VariableSizeParallelFusionBTree();
+        void insert(m512i_arr key, VT val, size_t threadId) {
+            insert(&root, key, val, threadId);
+        }
+        //returning VT and whether that is actually a valid value, ie whether the key is in the database
+        std::pair<VT, bool> pquery(m512i_arr key, size_t threadId) {
+            return pquery(key, &root, threadId);
+        }
+        // m512i_arr successor(m512i_arr key, size_t thread);
+        // m512i_arr predecessor(m512i_arr key, size_t thread);
+
+};
+
+template<typename VT>
+class VSBTreeThread {
+    private:
+        VariableSizeParallelFusionBTree<VT>& tree;
+        size_t threadId;
+        // std::pair<VT, bool> new_root_pquery(VSP_BTState<VT> state, m512i_arr key, int branch);
+        // std::pair<VT, bool> pquery(m512i_arr key, vsize_parallel_fusion_b_node<VT>* subroot);
+        
+
+    public:
+        VSBTreeThread(VariableSizeParallelFusionBTree<VT>& tree, int threadId): tree(tree), threadId(threadId) {}
+        void insert(m512i_arr key, VT val) {
+            tree.insert(key, val, threadId);
+        }
+        std::pair<VT, bool> pquery(m512i_arr key) {
+            return tree.pquery(key, threadId);
+        }
+        // m512i_arr successor(m512i_arr key) {
+        //     return tree.successor(key, threadId);
+        // }
+        // m512i_arr predecessor(m512i_arr key) {
+        //     return tree.predecessor(key, threadId);   
+        // }
 };
 
 void split_high_low(uint16_t mask, uint16_t& low, uint16_t& high, int pos) {
@@ -111,6 +150,22 @@ vsize_parallel_fusion_b_node<VT>::vsize_parallel_fusion_b_node(): fusion_interna
 template<typename VT>
 vsize_parallel_fusion_b_node<VT>::~vsize_parallel_fusion_b_node() {
     pc_destructor(&mtx.pc_counter);
+}
+
+template<typename VT>
+void vsize_parallel_fusion_b_node<VT>::deleteSubtrees() {
+    for(size_t i{0}; i < MAX_FUSION_SIZE+1; i++) {
+        if(children[i] != NULL) {
+            children[i]->deleteSubtrees();
+            delete children[i];
+        }
+    }
+    for(size_t i{0}; i < MAX_FUSION_SIZE; i++) {
+        if(subtree_roots[i] != NULL) {
+            subtree_roots[i]->deleteSubtrees();
+            delete subtree_roots[i];
+        }
+    }
 }
 
 template<typename VT>
@@ -209,6 +264,9 @@ bool m512i_arr::inc_offset(){
     return offset < size;
 }
 
+
+
+
 //Maybe the fullkey stuff should be handled by the fusion_tree code directly since the structure "belongs" to it? As in inserting a blank space for it, here we would populate it obviously
 template<typename VT>
 void extra_splitting(vsize_parallel_fusion_b_node<VT>* par, vsize_parallel_fusion_b_node<VT>* cur, vsize_parallel_fusion_b_node<VT>* lc, vsize_parallel_fusion_b_node<VT>* rc, int medpos, fusion_metadata old_meta) {
@@ -255,11 +313,20 @@ void extra_splitting(vsize_parallel_fusion_b_node<VT>* par, vsize_parallel_fusio
     }
 }
 
-template<typename VT>
-void vsize_parallel_insert_full_tree_DLock(vsize_parallel_fusion_b_node<VT>* root, m512i_arr key, VT val, uint8_t thread_id);
+
+
 
 template<typename VT>
-void set_val_and_new_root(VSP_BTState<VT> state, m512i_arr key, VT val, int branch, uint8_t thread_id) {
+VariableSizeParallelFusionBTree<VT>::VariableSizeParallelFusionBTree(size_t numThreads): numThreads{numThreads}, idgen{numThreads}, root{} {
+}
+
+template<typename VT>
+VariableSizeParallelFusionBTree<VT>::~VariableSizeParallelFusionBTree() {
+    root.deleteSubtrees();
+}
+
+template<typename VT>
+void VariableSizeParallelFusionBTree<VT>::set_val_and_new_root(VSP_BTState<VT> state, m512i_arr key, VT val, int branch, size_t thread_id) {
     //If key already there, then this just overwrites the val, I suppose?
     if (!key.inc_offset()) {
         // cout << "Inserting val " << val << " into node " << state.cur->id << endl;
@@ -276,13 +343,13 @@ void set_val_and_new_root(VSP_BTState<VT> state, m512i_arr key, VT val, int bran
         }
         vsize_parallel_fusion_b_node<VT>* new_root = state.cur->subtree_roots[branch];
         state.write_unlock_both();
-        return vsize_parallel_insert_full_tree_DLock(new_root, key, val, thread_id);
+        return insert(new_root, key, val, thread_id);
     }
 }
 
 //keep track of how many times we "restart" in the tree?
 template<typename VT>
-void vsize_parallel_insert_full_tree_DLock(vsize_parallel_fusion_b_node<VT>* root, m512i_arr key, VT val, uint8_t thread_id) {
+void VariableSizeParallelFusionBTree<VT>::insert(vsize_parallel_fusion_b_node<VT>* root, m512i_arr key, VT val, size_t thread_id) {
     // cout << "Called with " << key.offset << " " << key.size << ", root id: " << root->id << endl;
     VSP_BTState<VT> state(root, thread_id);
 
@@ -292,97 +359,42 @@ void vsize_parallel_insert_full_tree_DLock(vsize_parallel_fusion_b_node<VT>* roo
 
     while(true) {
         if(state.split_if_needed(extra_splitting<VT>)) {
-            return vsize_parallel_insert_full_tree_DLock(root, key, val, thread_id);
+            return insert(root, key, val, thread_id);
         }
         int branch = query_branch_node(&state.cur->fusion_internal_tree, *curkey);
         if(branch < 0) { 
             branch = ~branch;
             if(state.try_upgrade_reverse_order())
-                return set_val_and_new_root<VT>(state, key, val, branch, thread_id);
-            return vsize_parallel_insert_full_tree_DLock(root, key, val, thread_id);
+                return set_val_and_new_root(state, key, val, branch, thread_id);
+            return insert(root, key, val, thread_id);
         }
         if(state.cur->children[branch] == NULL) {
             if(state.try_insert_key(*curkey, false)) {
                 int branch = ~query_branch_node(&state.cur->fusion_internal_tree, *curkey);
                 // print_vec(state.cur->fusion_internal_tree.keys[0], true);
                 state.cur->finish_key_insert(branch);
-                return set_val_and_new_root<VT>(state, key, val, branch, thread_id);
+                return set_val_and_new_root(state, key, val, branch, thread_id);
             }
-            return vsize_parallel_insert_full_tree_DLock(root, key, val, thread_id);
+            return insert(root, key, val, thread_id);
         }
         if(!state.try_HOH_readlock(state.cur->children[branch])) {
-            return vsize_parallel_insert_full_tree_DLock(root, key, val, thread_id);
+            return insert(root, key, val, thread_id);
         }
     }
 }
 
+// template<typename VT>
+// void VariableSizeParallelFusionBTree<VT>::insert(m512i_arr key, VT val, size_t threadId) {
+//     insert(root, key, val, thread_id);
+// }
 
-//temporary function need to redo the return val here
-template<typename VT>
-m512i_arr vsize_parallel_successor_DLock(vsize_parallel_fusion_b_node<VT>* root, m512i_arr key, uint8_t thread_id) { //returns null if there is no successor
-    return m512i_arr(NULL, 0);
-    
-    // __m512i* retval = NULL;
-    // VSP_BTState<VT> state(root, thread_id);
-    
-    // while(true) {
-    //     int branch = query_branch_node(&state.cur->fusion_internal_tree, key);
-    //     if(branch < 0) {
-    //         branch = (~branch) + 1;
-    //     }
-    //     if(state.cur->fusion_internal_tree.tree.meta.size > branch) {
-    //         retval = &state.cur->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&state.cur->fusion_internal_tree, branch)];
-    //     }
-    //     if(state.cur->children[branch] == NULL) {
-    //         state.read_unlock_both();
-    //         return retval;
-    //     }
-
-    //     if(!state.try_HOH_readlock(state.cur->children[branch])) {
-    //         return parallel_successor_DLock(root, key, thread_id);
-    //     }
-    // }
-}
+// template<typename VT>
+// std::pair<VT, bool> VariableSizeParallelFusionBTree<VT>::pquery(m512i_arr key) {
+//     return pquery(key, root);
+// }
 
 template<typename VT>
-m512i_arr vsize_parallel_predecessor_DLock(vsize_parallel_fusion_b_node<VT>* root, m512i_arr key, uint8_t thread_id) { //returns null if there is no successor
-    return m512i_arr(NULL, 0);
-
-    // __m512i* retval = NULL;
-    // VSP_BTState<VT> state(root, thread_id);
-
-    // while(true) {
-    //     int branch = query_branch_node(&state.cur->fusion_internal_tree, key);
-    //     if(branch < 0) {
-    //         branch = (~branch);
-    //     }
-    //     if(branch > 0) {
-    //         retval = &state.cur->fusion_internal_tree.keys[get_real_pos_from_sorted_pos(&state.cur->fusion_internal_tree, branch-1)];
-    //     }
-    //     if(state.cur->children[branch] == NULL) {
-    //         state.read_unlock_both();
-    //         return retval;
-    //     }
-
-    //     if(!state.try_HOH_readlock(state.cur->children[branch])) {
-    //         return parallel_predecessor_DLock(root, key, thread_id);
-    //     }
-    // }
-}
-
-
-template<typename VT>
-void VariableSizeParallelFusionBTree<VT>::insert(m512i_arr key, VT val) {
-    vsize_parallel_insert_full_tree_DLock<VT>(root, key, val, thread_id);
-}
-
-template<typename VT>
-std::pair<VT, bool> VariableSizeParallelFusionBTree<VT>::pquery(m512i_arr key) {
-    return pquery(key, root);
-}
-
-template<typename VT>
-std::pair<VT, bool> VariableSizeParallelFusionBTree<VT>::new_root_pquery(VSP_BTState<VT> state, m512i_arr key, int branch) {
+std::pair<VT, bool> VariableSizeParallelFusionBTree<VT>::new_root_pquery(VSP_BTState<VT> state, m512i_arr key, int branch, size_t threadId) {
     // cout << "Got here at least" << endl;
     //If key already there, then this just overwrites the val, I suppose?
     if (!key.inc_offset()) {
@@ -403,14 +415,14 @@ std::pair<VT, bool> VariableSizeParallelFusionBTree<VT>::new_root_pquery(VSP_BTS
         }
         vsize_parallel_fusion_b_node<VT>* new_root = state.cur->subtree_roots[branch];
         state.read_unlock_both();
-        return pquery(key, new_root);
+        return pquery(key, new_root, threadId);
     }
 }
 
 template<typename VT>
-std::pair<VT, bool> VariableSizeParallelFusionBTree<VT>::pquery(m512i_arr key, vsize_parallel_fusion_b_node<VT>* subroot) {
+std::pair<VT, bool> VariableSizeParallelFusionBTree<VT>::pquery(m512i_arr key, vsize_parallel_fusion_b_node<VT>* subroot, size_t threadId) {
     // cout << "Called with " << key.offset << " " << key.size << ", root id: " << subroot->id << endl;
-    VSP_BTState<VT> state(subroot, thread_id); //This was root before and taking the element in the class causing problems. Like be consistent with naming or figure out another way to not have this particular problem
+    VSP_BTState<VT> state(subroot, threadId); //This was root before and taking the element in the class causing problems. Like be consistent with naming or figure out another way to not have this particular problem
 
     __m512i* curkey = key.get_at_offset();
     // print_vec(*curkey, true);
@@ -419,7 +431,7 @@ std::pair<VT, bool> VariableSizeParallelFusionBTree<VT>::pquery(m512i_arr key, v
         int branch = query_branch_node(&state.cur->fusion_internal_tree, *curkey);
         if(branch < 0) { 
             branch = ~branch;
-            return new_root_pquery(state, key, branch);
+            return new_root_pquery(state, key, branch, threadId);
         }
         if(state.cur->children[branch] == NULL) { //haven't found an exact match for our portion of the key in the tree, so we know that the query is false
             // cout << "WTF" << endl;
@@ -429,19 +441,19 @@ std::pair<VT, bool> VariableSizeParallelFusionBTree<VT>::pquery(m512i_arr key, v
             return std::make_pair(0, false);
         }
         if(!state.try_HOH_readlock(state.cur->children[branch])) {
-            return pquery(key, subroot);
+            return pquery(key, subroot, threadId);
         }
     }
 }
 
-template<typename VT>
-m512i_arr VariableSizeParallelFusionBTree<VT>::successor(m512i_arr key) {
-    return vsize_parallel_successor_DLock<VT>(root, key, thread_id);
-}
+// template<typename VT>
+// m512i_arr VariableSizeParallelFusionBTree<VT>::successor(m512i_arr key) {
+//     return vsize_parallel_successor_DLock<VT>(root, key, thread_id);
+// }
 
-template<typename VT>
-m512i_arr VariableSizeParallelFusionBTree<VT>::predecessor(m512i_arr key) {
-    return vsize_parallel_predecessor_DLock<VT>(root, key, thread_id);
-}
+// template<typename VT>
+// m512i_arr VariableSizeParallelFusionBTree<VT>::predecessor(m512i_arr key) {
+//     return vsize_parallel_predecessor_DLock<VT>(root, key, thread_id);
+// }
 
 #endif

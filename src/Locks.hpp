@@ -1,7 +1,11 @@
 #ifndef LOCKS_INCLUDE
 #define LOCKS_INCLUDE
 
-struct LockUnit alignas(64) {
+#include <atomic>
+#include <cstdint>
+#include <array>
+
+struct alignas(64) LockUnit {
     std::atomic<uint64_t> lockId;
     uint64_t padding[7];
 
@@ -9,7 +13,7 @@ struct LockUnit alignas(64) {
     void unlock();
 };
 
-struct PackedLockUnit alignas(64) { //This struct should be a typedef I'm being very hacky here. There is no reason to not make it typedef
+struct alignas(64) PackedLockUnit { //This struct should be a typedef I'm being very hacky here. There is no reason to not make it typedef
     static constexpr size_t numLocks = 8;
     using container = std::array<std::atomic<uint64_t>, numLocks>;
     using iterator=typename container::iterator;

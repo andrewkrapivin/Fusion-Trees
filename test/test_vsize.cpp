@@ -25,7 +25,7 @@
 #include "../src/BenchHelper.h"
 
 // template<typename VT>
-void vsize_parallel_insert_items(VariableSizeParallelFusionBTree<uint64_t> vspft, m512i_arr items[], uint64_t vals[], size_t num, string path) {
+void vsize_parallel_insert_items(VSBTreeThread<uint64_t> vspft, m512i_arr items[], uint64_t vals[], size_t num, string path) {
     for(size_t i = 0; i < num; i++) {
         // m512i_arr tmp(&items[i], 2);
         vspft.insert(items[i], vals[i]);
@@ -34,7 +34,7 @@ void vsize_parallel_insert_items(VariableSizeParallelFusionBTree<uint64_t> vspft
 }
 
 // template<typename VT>
-void vsize_parallel_pq_items(VariableSizeParallelFusionBTree<uint64_t> vspft, m512i_arr items[], uint64_t vals[], size_t num, string path) {
+void vsize_parallel_pq_items(VSBTreeThread<uint64_t> vspft, m512i_arr items[], uint64_t vals[], size_t num, string path) {
     for(size_t i = 0; i < num; i++) {
         // m512i_arr tmp(&items[i], 2);
         std::pair<uint64_t, bool> test = vspft.pquery(items[i]);
@@ -46,8 +46,9 @@ void vsize_parallel_pq_items(VariableSizeParallelFusionBTree<uint64_t> vspft, m5
 int main(int argc, char** argv) {
     unsigned seed = chrono::steady_clock::now().time_since_epoch().count();
     mt19937 generator (seed);
-    vsize_parallel_fusion_b_node<uint64_t>* root = new vsize_parallel_fusion_b_node<uint64_t>();
-    rw_lock_init(&root->mtx);
+    // vsize_parallel_fusion_b_node<uint64_t>* root = new vsize_parallel_fusion_b_node<uint64_t>();
+
+    // rw_lock_init(&root->mtx);
 
     size_t bigtestsize = 30;
     if(argc >= 2)
@@ -58,6 +59,8 @@ int main(int argc, char** argv) {
     if(argc < 3+numThreads) {
         exit(1);
     }
+
+    VariableSizeParallelFusionBTree<uint64_t> tree{numThreads};
     
     __m512i* big_randomlist = static_cast<__m512i*>(std::aligned_alloc(64, bigtestsize*64));
     uint64_t* vals = new uint64_t[bigtestsize];
@@ -82,10 +85,10 @@ int main(int argc, char** argv) {
     free(big_randomlist);
 
     std::vector<size_t> indices;
-    std::vector<VariableSizeParallelFusionBTree<uint64_t>> vspfts;
+    std::vector<VSBTreeThread<uint64_t>> vspfts;
     for(size_t i = 0; i <= numThreads; i++) {
         indices.push_back(bigtestsize*i/numThreads);
-        vspfts.push_back(VariableSizeParallelFusionBTree<uint64_t>(root, i));
+        vspfts.push_back(VSBTreeThread<uint64_t>(tree, i));
     }
 
     shuffle(test_arr, test_arr+bigtestsize, generator);

@@ -19,9 +19,9 @@ struct BTState {
 
     NT* cur;
     NT* par;
-    uint8_t thread_id;
+    size_t thread_id;
     // template<bool HP> NT (*extra_splitting)(NT*, NT*, NT*);
-    BTState(NT* root, uint8_t thread_id);
+    BTState(NT* root, size_t thread_id);
     // template<bool HP> bool try_upgrade_reverse_order(); //HP: has par
     // template<bool HP> void read_unlock_both();
     // template<bool HP> void write_unlock_both();
@@ -46,7 +46,7 @@ struct BTState {
 
 
 template<typename NT, bool useLock>
-BTState<NT, useLock>::BTState(NT* root, uint8_t thread_id): cur(root), par(NULL), thread_id(thread_id) {
+BTState<NT, useLock>::BTState(NT* root, size_t thread_id): cur(root), par(NULL), thread_id(thread_id) {
     if constexpr (useLock)
         read_lock(&cur->mtx, WAIT_FOR_LOCK, thread_id);
 }
