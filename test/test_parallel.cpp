@@ -27,6 +27,7 @@
 void parallel_insert_items(parallel_fusion_b_node* root, __m512i items[], size_t num, size_t numThreads, uint8_t id) {
     ParallelFusionBTree pft(root, numThreads, id);
     for(size_t i = 0; i < num; i++) {
+        // cout << i << endl;
         pft.insert(items[i]);
     }
 }

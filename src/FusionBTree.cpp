@@ -15,7 +15,9 @@ void parallel_insert_full_tree_DLock(NodeName* root, __m512i key, size_t numThre
 
     while(true) {
         if(state.split_if_needed()) {
+            // std::cout << "NANDE " << std::endl;
             return parallel_insert_full_tree_DLock<NodeName, useLock>(root, key, numThreads, thread_id);
+            // std::cout << "NANDE2" << std::endl;
         }
         int branch = query_branch_node(&state.cur->fusion_internal_tree, key);
         if(branch < 0) { //say exact match just return & do nothing
@@ -26,9 +28,11 @@ void parallel_insert_full_tree_DLock(NodeName* root, __m512i key, size_t numThre
             if(state.try_insert_key(key)) {
                 return;
             }
+            // std::cout << "NANDE3" << std::endl;
             return parallel_insert_full_tree_DLock<NodeName, useLock>(root, key, numThreads, thread_id);
         }
         if(!state.try_HOH_readlock(state.cur->children[branch])) {
+            // std::cout << "NANDE4" << std::endl;
             return parallel_insert_full_tree_DLock<NodeName, useLock>(root, key, numThreads, thread_id);
         }
     }
@@ -64,7 +68,6 @@ template<typename NodeName, bool useLock>
 __m512i* parallel_predecessor_DLock(NodeName* root, __m512i key, size_t numThreads, uint8_t thread_id) { //returns null if there is no successor
     __m512i* retval = NULL;
     BTState<NodeName, useLock> state(root, numThreads, thread_id);
-
     while(true) {
         int branch = query_branch_node(&state.cur->fusion_internal_tree, key);
         if(branch < 0) {

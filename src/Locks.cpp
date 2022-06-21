@@ -1,4 +1,6 @@
 #include "Locks.hpp"
+#include <iostream>
+#include <cassert>
 
 void WriteMutex::lock() {
     // Should I use compare_exchange or exchange? Cause here can have weaker memory order on fail, so could be faster?
@@ -19,11 +21,17 @@ void WriteMutex::unlock() {
 
 
 ReadWriteMutex::ReadWriteMutex(size_t numThreads): rlUnits(numThreads) {
+    assert(wlUnit.lockId.load() == 0);
+    for(auto& x: rlUnits) {
+        assert(x.lockId.load() == 0);
+    }
 }
 
 void ReadWriteMutex::getWriteLock() {
-    while(wlUnit.lockId.exchange(1, std::memory_order_acquire) == 0) {
-        while(wlUnit.lockId.load(std::memory_order_relaxed) == 0);
+    // std::cout << "HELLO" << std::endl;
+    uint64_t expected = 0;
+    while(!wlUnit.lockId.compare_exchange_weak(expected, 1, std::memory_order_acquire, std::memory_order_relaxed)) {
+        expected = 0;
     }
 }
 
@@ -49,19 +57,24 @@ bool ReadWriteMutex::tryWriteLock() {
 }
 
 void ReadWriteMutex::partialUpgrade(size_t threadId) {
+    // std::cout << "HELLO6" << std::endl;
     getWriteLock();
     readUnlock(threadId);
+    // std::cout << "BYE6" << std::endl;
 }
 
 bool ReadWriteMutex::tryPartialUpgrade(size_t threadId, bool unlockOnFail /* = true */) {
+    // std::cout << "HELLO7" << std::endl;
     uint64_t expected = 0;
     if(!wlUnit.lockId.compare_exchange_strong(expected, 1, std::memory_order_acquire, std::memory_order_relaxed)) {
         if(unlockOnFail) {
             readUnlock(threadId);
         }
+        // std::cout << "BADBYE7" << std::endl;
         return false;
     }
     readUnlock(threadId);
+    // std::cout << "BYE7" << std::endl;
     return true;
 }
 
@@ -70,6 +83,7 @@ void ReadWriteMutex::finishPartialUpgrade() {
 }
 
 void ReadWriteMutex::readLock(size_t threadId) {
+    // std::cout << "HELLO2 " << threadId << std::endl;
     rlUnits[threadId].lockId.store(1, std::memory_order_release);
 
     while(wlUnit.lockId.load(std::memory_order_acquire) != 0) {
@@ -77,15 +91,20 @@ void ReadWriteMutex::readLock(size_t threadId) {
         while(wlUnit.lockId.load(std::memory_order_relaxed) != 0);
         rlUnits[threadId].lockId.store(1, std::memory_order_release);
     }
+    // std::cout << "BYE2" << std::endl;
 }
 
 bool ReadWriteMutex::tryReadLock(size_t threadId) {
     rlUnits[threadId].lockId.store(1, std::memory_order_release);
 
+    // std::cout << "HELLO5 " << threadId << std::endl;
+
     if(wlUnit.lockId.load(std::memory_order_acquire) != 0) {
         rlUnits[threadId].lockId.store(0, std::memory_order_relaxed);
         return false;
     }
+
+    // std::cout << "BYE5" << std::endl;
 
     return true;
 }
@@ -99,6 +118,7 @@ void ReadWriteMutex::partialUpgradeUnlock() {
 }
 
 void ReadWriteMutex::readUnlock(size_t threadId) {
+    // std::cout << "HELLO3 " << threadId << std::endl;
     rlUnits[threadId].lockId.store(0, std::memory_order_relaxed); //I think relaxed is fine here? Should test this on a system without strong memory ordering so not x86
 }
 
