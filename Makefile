@@ -1,5 +1,5 @@
 CXX = g++-11
-CXXFLAGS = -pthread -MMD -MP -march=icelake-client -std=c++20 -O3
+CXXFLAGS = -pthread -MMD -MP -march=icelake-client -std=c++20 -O3 -Wall -W
  
 SRCDIR = src
 OBJDIR = bin
@@ -11,10 +11,12 @@ TARGET_ILP = $(OBJDIR)/testILP
 
 
 src = $(wildcard $(SRCDIR)/*.cpp)
+srch = $(wildcard $(SRCDIR)/*.hpp)
 obj = $(patsubst $(SRCDIR)/%.cpp, $(OBJDIR)/%.o, $(src))
 srctest = $(wildcard $(TESTDIR)/*.cpp)
 objtest = $(patsubst $(TESTDIR)/%.cpp, $(TESTDIR)/%.o, $(srctest))
-dep = $(obj:.o=.d)
+#dep = $(obj:.o=.d)
+dep = $(patsubst %.cpp,%.d,$(src))
 
 all:
 	mkdir -p bin \
@@ -43,31 +45,31 @@ testILP:
 	
 	make $(TARGET_ILP)
 
-$(TARGET): test/test.o $(obj)
+$(TARGET): test/test.o $(obj) $(srch)
 	$(CXX) $(CXXFLAGS) $^ -o $@
 
-$(TARGET_PARALLEL): test/test_parallel.o $(obj)
+$(TARGET_PARALLEL): test/test_parallel.o $(obj) $(srch)
 	$(CXX) $(CXXFLAGS) $^ -o $@
 
-$(TARGET_VSIZE_PARALLEL): test/test_vsize.o $(obj)
+$(TARGET_VSIZE_PARALLEL): test/test_vsize.o $(obj) $(srch)
 	$(CXX) $(CXXFLAGS) $^ -o $@
 	
-$(TARGET_ILP): test/testILP.o $(obj)
+$(TARGET_ILP): test/testILP.o $(obj) $(srch)
 	$(CXX) $(CXXFLAGS) $^ -o $@
 
-test/test.o: test/test.cpp
+test/test.o: test/test.cpp $(srch)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-test/test_parallel.o: test/test_parallel.cpp
+test/test_parallel.o: test/test_parallel.cpp $(srch)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-test/test_vsize.o: test/test_vsize.cpp
+test/test_vsize.o: test/test_vsize.cpp $(srch)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-test/testILP.o: test/testILP.cpp
+test/testILP.o: test/testILP.cpp $(srch)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-$(OBJDIR)/%.o: $(SRCDIR)/%.cpp
+$(OBJDIR)/%.o: $(SRCDIR)/%.cpp Makefile $(srch)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 -include $(dep) 

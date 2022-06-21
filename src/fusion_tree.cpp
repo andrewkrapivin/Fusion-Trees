@@ -6,8 +6,6 @@
 #include <cstring>
 #include <cassert>
 
-extern const fusion_node Empty_Fusion_Node = {0};
-
 fusion_node* new_empty_fusion_node() {
 	fusion_node* new_node = static_cast<fusion_node*>(std::aligned_alloc(64, sizeof(fusion_node)));
     memset(new_node, 0, sizeof(fusion_node));
@@ -572,7 +570,6 @@ int insert_fast(fusion_node* node, __m512i key) {
 
 	if(node->tree.meta.size == MAX_FUSION_SIZE)
 		return -1;
-	int i = 0;
 
 	uint16_t first_sketch = extract_bits(&node->tree, key);
 	int first_guess_pos = search_pos_tree_fast(node, first_sketch);

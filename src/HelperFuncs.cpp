@@ -96,7 +96,7 @@ __m512i gen_random_vec_one_bit(mt19937& generator) {
     return A;
 }
 
-vector<int> generate_random_positions(mt19937& generator, int count, int maxpos /*=511*/){
+vector<int> generate_random_positions(mt19937& generator, size_t count, int maxpos /*=511*/){
     set<int> tmp;
     std::uniform_int_distribution<uint64_t> temporary_distribution(0, maxpos);
     while(tmp.size() < count) {

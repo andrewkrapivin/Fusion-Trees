@@ -3,8 +3,8 @@
 
 #include "fusion_tree.h"
 #include "SimpleAlloc.h"
-#include "UpgradeableMutex.h"
-#include "lock.h"
+// #include "lock.h"
+#include "Locks.hpp"
 #include <thread>
 #include <fstream>
 #include <ostream>
@@ -26,9 +26,10 @@ typedef struct fusion_b_node {
 typedef struct parallel_fusion_b_node {
     fusion_node fusion_internal_tree;
 	parallel_fusion_b_node* children[MAX_FUSION_SIZE+1];
-    ReaderWriterLock mtx;
+    // ReaderWriterLock mtx;
+    ReadWriteMutex mtx;
 
-    parallel_fusion_b_node();
+    parallel_fusion_b_node(size_t numThreads);
     ~parallel_fusion_b_node();
 } parallel_fusion_b_node;
 
@@ -61,10 +62,11 @@ class FusionBTree {
 class ParallelFusionBTree {
     private:
         parallel_fusion_b_node* root;
-        int thread_id;
+        size_t numThreads;
+        size_t thread_id;
 
     public:
-        ParallelFusionBTree(parallel_fusion_b_node* root, int thread_id): root(root), thread_id(thread_id) {}
+        ParallelFusionBTree(parallel_fusion_b_node* root, size_t numThreads, size_t thread_id): root(root), numThreads{numThreads}, thread_id(thread_id) {}
         void insert(__m512i key);
         __m512i* successor(__m512i key);
         __m512i* predecessor(__m512i key);

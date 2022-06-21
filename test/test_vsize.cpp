@@ -19,13 +19,13 @@
 #include "../src/fusion_tree.h"
 #include "../src/HelperFuncs.h"
 #include "../src/FusionBTree.h"
-#include "../src/VariableSizeFusionBTree.h"
+#include "../src/VariableSizeFusionBTree.hpp"
 #include "../src/FusionQSort.h"
 #include "../src/lock.h"
-#include "../src/BenchHelper.h"
+#include "../src/BenchHelper.hpp"
 
 // template<typename VT>
-void vsize_parallel_insert_items(VSBTreeThread<uint64_t> vspft, m512i_arr items[], uint64_t vals[], size_t num, string path) {
+void vsize_parallel_insert_items(VSBTreeThread<uint64_t> vspft, m512i_arr items[], uint64_t vals[], size_t num) {
     for(size_t i = 0; i < num; i++) {
         // m512i_arr tmp(&items[i], 2);
         vspft.insert(items[i], vals[i]);
@@ -34,7 +34,7 @@ void vsize_parallel_insert_items(VSBTreeThread<uint64_t> vspft, m512i_arr items[
 }
 
 // template<typename VT>
-void vsize_parallel_pq_items(VSBTreeThread<uint64_t> vspft, m512i_arr items[], uint64_t vals[], size_t num, string path) {
+void vsize_parallel_pq_items(VSBTreeThread<uint64_t> vspft, m512i_arr items[], uint64_t vals[], size_t num) {
     for(size_t i = 0; i < num; i++) {
         // m512i_arr tmp(&items[i], 2);
         std::pair<uint64_t, bool> test = vspft.pquery(items[i]);
@@ -56,21 +56,18 @@ int main(int argc, char** argv) {
     size_t numThreads = 1;
     if(argc >= 3)
         numThreads = atoi(argv[2]);
-    if(argc < 3+numThreads) {
-        exit(1);
-    }
 
     VariableSizeParallelFusionBTree<uint64_t> tree{numThreads};
     
     __m512i* big_randomlist = static_cast<__m512i*>(std::aligned_alloc(64, bigtestsize*64));
     uint64_t* vals = new uint64_t[bigtestsize];
-    for(int i=0; i < bigtestsize; i++) {
+    for(size_t i{0}; i < bigtestsize; i++) {
     	big_randomlist[i] = gen_random_vec(generator);
         // vals[i] = gen_random_uint64(generator);
         vals[i] = i;
     }
     m512i_arr* test_arr = static_cast<m512i_arr*>(malloc(sizeof(m512i_arr)*bigtestsize)); //why new no work here?
-    for(int i=0, j=0; i < bigtestsize; i++) {
+    for(size_t i{0}, j=0; i < bigtestsize; i++) {
         if(i%10 == 0) {
             j = i;
             test_arr[i] = m512i_arr(1);
@@ -86,7 +83,7 @@ int main(int argc, char** argv) {
 
     std::vector<size_t> indices;
     std::vector<VSBTreeThread<uint64_t>> vspfts;
-    for(size_t i = 0; i <= numThreads; i++) {
+    for(size_t i{0}; i <= numThreads; i++) {
         indices.push_back(bigtestsize*i/numThreads);
         vspfts.push_back(VSBTreeThread<uint64_t>(tree, i));
     }
@@ -95,13 +92,13 @@ int main(int argc, char** argv) {
 
     BenchHelper bench(numThreads);
 
-    for(size_t i = 0; i < numThreads; i++) {
-        bench.addFunctionForThreadTest([=] () -> void { vsize_parallel_insert_items(vspfts[i], test_arr+indices[i], vals+indices[i], indices[i+1]-indices[i], argv[3+i]);});
+    for(size_t i{0}; i < numThreads; i++) {
+        bench.addFunctionForThreadTest([=] () -> void { vsize_parallel_insert_items(vspfts[i], test_arr+indices[i], vals+indices[i], indices[i+1]-indices[i]);});
     }
     bench.timeThreadedFunction("vsize parallel insert");
 
-    for(size_t i = 0; i < numThreads; i++) {
-        bench.addFunctionForThreadTest([=] () -> void { vsize_parallel_pq_items(vspfts[i], test_arr+indices[i], vals+indices[i], indices[i+1]-indices[i], argv[3+i]);});
+    for(size_t i{0}; i < numThreads; i++) {
+        bench.addFunctionForThreadTest([=] () -> void { vsize_parallel_pq_items(vspfts[i], test_arr+indices[i], vals+indices[i], indices[i+1]-indices[i]);});
     }
     bench.timeThreadedFunction("vsize parallel point query random order");
 

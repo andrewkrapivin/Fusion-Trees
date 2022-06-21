@@ -4,13 +4,14 @@
 #include <atomic>
 #include <cstdint>
 #include <array>
+#include <vector>
 
 struct alignas(64) LockUnit {
-    std::atomic<uint64_t> lockId;
+    std::atomic<uint64_t> lockId{0};
     uint64_t padding[7];
 
-    void lock();
-    void unlock();
+    // void lock();
+    // void unlock();
 };
 
 struct alignas(64) PackedLockUnit { //This struct should be a typedef I'm being very hacky here. There is no reason to not make it typedef
@@ -20,6 +21,50 @@ struct alignas(64) PackedLockUnit { //This struct should be a typedef I'm being 
     using const_iterator=typename container::const_iterator;
     // std::atomic<uint64_t> lockId[numLocks];
     container lockIds = {};
+    iterator begin() {
+        return lockIds.begin();
+    }
+    iterator end() {
+        return lockIds.end();
+    }
+    const_iterator cbegin() const { 
+        return lockIds.cbegin();
+    }
+    const_iterator cend() const {
+        return lockIds.cend();
+    }
+};
+
+class alignas(64) WriteMutex {
+    private:
+        LockUnit wlUnit;
+
+    public:
+        void lock();
+        bool tryLock();
+        void unlock();
+};
+
+class alignas(64) ReadWriteMutex {
+    private:
+        LockUnit wlUnit; //writelock
+        std::vector<LockUnit> rlUnits; //readlocks
+        void getWriteLock();
+        void waitForReadLocks();
+
+    public:
+        ReadWriteMutex(size_t numThreads);
+        void writeLock();
+        bool tryWriteLock();
+        void partialUpgrade(size_t threadId);
+        bool tryPartialUpgrade(size_t threadId, bool unlockOnFail = true);
+        void finishPartialUpgrade();
+        void readLock(size_t threadId);
+        bool tryReadLock(size_t threadId);
+        void writeUnlock();
+        void partialUpgradeUnlock();
+        void readUnlock(size_t threadId);
+
 };
 
 

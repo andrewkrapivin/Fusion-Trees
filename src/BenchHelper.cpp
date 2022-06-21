@@ -1,4 +1,4 @@
-#include "BenchHelper.h"
+#include "BenchHelper.hpp"
 #include <chrono>
 #include <iostream>
 
