@@ -481,8 +481,52 @@ void LockHashTable::readUnlock(size_t id, size_t threadId) {
 //     holdingLock = status == TryLockPossibilities::Success;
 // }
 
-HashLock::HashLock(LockHashTable* table, size_t id, size_t threadId): table(table), id(id), threadId(threadId), curLockType(LockType::Unlocked) {
+HashMutex::HashMutex(LockHashTable* table, size_t id) : table(table), id(id) {}
+
+void HashMutex::writeLock() {
+    table->writeLock(id);
 }
+
+//change this return type to TryLockPossibilities? I just have it here as a bool to be compatible with the old code
+bool HashMutex::tryWriteLock() {
+    return table->tryWriteLock(id) == TryLockPossibilities::Success;
+}
+
+void HashMutex::partialUpgrade(size_t threadId) {
+    table->partialUpgrade(id, threadId);
+}
+
+bool HashMutex::tryPartialUpgrade(size_t threadId, bool unlockOnFail) {
+    return table->tryPartialUpgrade(id, threadId, unlockOnFail) == TryLockPossibilities::Success;
+}
+
+void HashMutex::finishPartialUpgrade() {
+    table->finishPartialUpgrade(id);
+}
+
+void HashMutex::readLock(size_t threadId) {
+    table->readLock(id, threadId);
+}
+
+bool HashMutex::tryReadLock(size_t threadId) {
+    return table->tryReadLock(id, threadId) == TryLockPossibilities::Success;
+}
+
+void HashMutex::writeUnlock() {
+    table->writeUnlock(id);
+}
+
+void HashMutex::partialUpgradeUnlock() {
+    table->partialUpgradeUnlock(id);
+}
+
+void HashMutex::readUnlock(size_t threadId) {
+    table->readUnlock(id, threadId);
+}
+
+
+
+HashLock::HashLock(LockHashTable* table, size_t id, size_t threadId): table(table), id(id), threadId(threadId), curLockType(LockType::Unlocked) {}
 
 HashLock::HashLock(HashLock&& a): table(a.table), id(a.id), threadId(a.threadId), curLockType(a.curLockType) {
     a.table = nullptr;
@@ -506,6 +550,7 @@ HashLock& HashLock::operator=(HashLock&& a) {
     //         partialUpgradeUnlock();
     //         break;
     // }
+        bool tryReadLock(size_t threadId);
     unlock();
 
     //Seems this code is a bit repetitive with the move one? Combine somehow?
@@ -526,6 +571,7 @@ HashLock::~HashLock() {
 }
 
 //Here I guess switch based on type. Get a write lock no matter what.
+//probably not really needed cause typically one would require the programmer to have the writelock unlocked, but idk can add this functionality so whatever.
 void HashLock::writeLock() {
     assert(threadId != -1ull);
     switch(curLockType) {
@@ -563,11 +609,13 @@ void HashLock::partialUpgrade() {
     switch(curLockType) {
         case LockType::Unlocked: //esp this is dumb
             readLock();
-            partialUpgrade();
+            // partialUpgrade();
+            table->partialUpgrade(id, threadId);
             curLockType = LockType::PartiallyWriteLocked;
             break;
         case LockType::ReadLocked:
-            partialUpgrade();
+            // partialUpgrade();
+            table->partialUpgrade(id, threadId); 
             curLockType = LockType::PartiallyWriteLocked;
             break;
         case LockType::PartiallyWriteLocked:
@@ -581,7 +629,7 @@ TryLockPossibilities HashLock::tryPartialUpgrade(bool unlockOnFail)  {
     assert(threadId != -1ull);
     if(curLockType != LockType::ReadLocked) return TryLockPossibilities::Error; //maybe put this behind a debug constexpr or something
 
-    TryLockPossibilities t = table->LockHashTable::tryPartialUpgrade(id, threadId, unlockOnFail);
+    TryLockPossibilities t = table->tryPartialUpgrade(id, threadId, unlockOnFail);
 
     if(t == TryLockPossibilities::Success) {
         curLockType = LockType::PartiallyWriteLocked;
@@ -633,7 +681,22 @@ void HashLock::unlock() {
             table->partialUpgradeUnlock(id);
             break;
     }
+    curLockType = LockType::Unlocked;
 }
-// void writeUnlock();
-// void partialUpgradeUnlock();
-// void readUnlock();
+
+void HashLock::writeUnlock() {
+    if(threadId == -1ull) return;
+    table->writeUnlock(id);
+    curLockType = LockType::Unlocked;
+}
+void HashLock::partialUpgradeUnlock() {
+    if(threadId == -1ull) return;
+    table->readUnlock(id, threadId);
+    curLockType = LockType::Unlocked;
+}
+
+void HashLock::readUnlock() {
+    if(threadId == -1ull) return;
+    table->readUnlock(id, threadId);
+    curLockType = LockType::Unlocked;
+}

@@ -24,8 +24,7 @@
 #include "../src/lock.h"
 #include "../src/BenchHelper.hpp"
 
-void parallel_insert_items(parallel_fusion_b_node* root, __m512i items[], size_t num, size_t numThreads, uint8_t id) {
-    ParallelFusionBTree pft(root, numThreads, id);
+void parallel_insert_items(ParallelFusionBTreeThread pft, __m512i items[], size_t num) {
     for(size_t i = 0; i < num; i++) {
         // cout << i << endl;
         pft.insert(items[i]);
@@ -33,20 +32,19 @@ void parallel_insert_items(parallel_fusion_b_node* root, __m512i items[], size_t
 }
 
 template<bool chk = false>
-void parallel_succ_items(parallel_fusion_b_node* root, __m512i items[], size_t num, size_t numThreads, uint8_t id) {
-    ParallelFusionBTree pft(root, numThreads, id);
+void parallel_succ_items(ParallelFusionBTreeThread pft, __m512i items[], size_t num) {
     for(size_t i = 0; i < num; i++) {
         __m512i* test = pft.successor(items[i]);
         if constexpr (chk) assert(i >=num-2 || first_diff_bit_pos(*test, items[i+1]) == -1);
     }
 }
 
-void parallel_pred_items(parallel_fusion_b_node* root, __m512i items[], size_t num, size_t numThreads, uint8_t id) {
-    ParallelFusionBTree pft(root, numThreads, id);
+template<bool chk = false>
+void parallel_pred_items(ParallelFusionBTreeThread pft, __m512i items[], size_t num) {
     for(size_t i = 0; i < num; i++) {
         __m512i* test = pft.predecessor(items[i]);
-        (void)test;
-        // assert(i == 0 || first_diff_bit_pos(*test, items[i-1]) == -1);
+        // (void)test;
+        if constexpr (chk) assert(i == 0 || first_diff_bit_pos(*test, items[i-1]) == -1);
     }
 }
 
@@ -62,7 +60,12 @@ int main(int argc, char** argv) {
     if(argc >= 3)
         numThreads = atoi(argv[2]);
 
-    parallel_fusion_b_node* root = new parallel_fusion_b_node(numThreads);
+    // parallel_fusion_b_node* root = new parallel_fusion_b_node(numThreads);
+    ParallelFusionBTree pft{numThreads};
+    vector<ParallelFusionBTreeThread> pftThreads;
+    for(size_t i{0}; i < numThreads; i++) {
+        pftThreads.push_back(ParallelFusionBTreeThread{pft, i});
+    }
     
     __m512i* big_randomlist = static_cast<__m512i*>(std::aligned_alloc(64, bigtestsize*64));
     for(size_t i{0}; i < bigtestsize; i++) {
@@ -77,7 +80,9 @@ int main(int argc, char** argv) {
     BenchHelper bench(numThreads);
 
     for(size_t i = 0; i < numThreads; i++) {
-        bench.addFunctionForThreadTest([=] () -> void { parallel_insert_items(root, big_randomlist+indices[i], indices[i+1]-indices[i], numThreads, i);});
+        bench.addFunctionForThreadTest([=] () -> void {
+            parallel_insert_items(pftThreads[i], big_randomlist+indices[i], indices[i+1]-indices[i]);
+        });
     }
     bench.timeThreadedFunction("parallel insert");
 
@@ -86,20 +91,20 @@ int main(int argc, char** argv) {
     }, "sort on big keys");
 
     for(size_t i = 0; i < numThreads; i++) {
-        bench.addFunctionForThreadTest([=] () -> void { parallel_succ_items<true>(root, big_randomlist+indices[i], indices[i+1]-indices[i], numThreads, i);});
+        bench.addFunctionForThreadTest([=] () -> void { parallel_succ_items<true>(pftThreads[i], big_randomlist+indices[i], indices[i+1]-indices[i]);});
     }
     bench.timeThreadedFunction("parallel successor sorted");
 
     shuffle(big_randomlist, big_randomlist+bigtestsize, generator);
 
     for(size_t i = 0; i < numThreads; i++) {
-        bench.addFunctionForThreadTest([=] () -> void { parallel_succ_items(root, big_randomlist+indices[i], indices[i+1]-indices[i], numThreads, i);});
+        bench.addFunctionForThreadTest([=] () -> void { parallel_succ_items(pftThreads[i], big_randomlist+indices[i], indices[i+1]-indices[i]);});
     }
     bench.timeThreadedFunction("parallel successor random");
 
 
     for(size_t i = 0; i < numThreads; i++) {
-        bench.addFunctionForThreadTest([=] () -> void { parallel_pred_items(root, big_randomlist+indices[i], indices[i+1]-indices[i], numThreads, i);});
+        bench.addFunctionForThreadTest([=] () -> void { parallel_pred_items(pftThreads[i], big_randomlist+indices[i], indices[i+1]-indices[i]);});
     }
     bench.timeThreadedFunction("parallel predecessor random");
 }

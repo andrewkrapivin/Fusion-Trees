@@ -34,7 +34,7 @@
 //Since size of lock is proportional to threads, this has a scaling problem of using O(t^2) space where t is threadcount.
 //Should numThreads be constant time or runtime? Idk. Feels like constant should work but runtime should be better so that say can query cpucount @ runtime
 
-constexpr float sizeOverhead = 3.0; //inverse of load factor. Keeping it const for now but probably make it configurable 
+constexpr float sizeOverhead = 5.0; //inverse of load factor. Keeping it const for now but probably make it configurable 
 
 enum class TryLockPossibilities {
     Success,
@@ -106,6 +106,7 @@ class LockHashTable {
         void writeLock(size_t id);
         TryLockPossibilities tryWriteLock(size_t id); //Change the size_t here to uint64_t since I use that to index everything. Idk why I chose size_t in the first place, or choose size_t for the atomic units.
         void partialUpgrade(size_t id, size_t threadId);
+        //If unlockOnFail is set to true, this will unlock the lock no matter the type of error, even if it is some error of the hash table entry being full or whatever
         TryLockPossibilities tryPartialUpgrade(size_t id, size_t threadId, bool unlockOnFail = true);
         void finishPartialUpgrade(size_t id);
         void readLock(size_t id, size_t threadId);
@@ -115,6 +116,27 @@ class LockHashTable {
         void readUnlock(size_t id, size_t threadId);
 };
 
+class HashMutex {
+    private:
+        LockHashTable* table;
+        size_t id;
+
+    public:
+        HashMutex(LockHashTable* table, size_t id);
+        void writeLock();
+        bool tryWriteLock();
+        void partialUpgrade(size_t threadId);
+        bool tryPartialUpgrade(size_t threadId, bool unlockOnFail = true);
+        void finishPartialUpgrade();
+        void readLock(size_t threadId);
+        bool tryReadLock(size_t threadId);
+        void writeUnlock();
+        void partialUpgradeUnlock();
+        void readUnlock(size_t threadId);
+
+};
+
+//Change this to add a constructor from HashMutex? Not really a big change but really shouldn't matter much anyways
 class HashLock {
     private:
         LockHashTable* table; //Seems I need to make this a pointer to allow for the move assignment operator? Cause it seems to try to move the references or something? And move constructions can and should not be defined for this.
@@ -140,9 +162,9 @@ class HashLock {
         void finishPartialUpgrade();
         void readLock();
         TryLockPossibilities tryReadLock();
-        // void writeUnlock();
-        // void partialUpgradeUnlock();
-        // void readUnlock();
+        void writeUnlock();
+        void partialUpgradeUnlock();
+        void readUnlock();
         void unlock(); //Automatically just sees what it needs to unlock.
 
 };
