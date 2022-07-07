@@ -34,7 +34,7 @@
 //Since size of lock is proportional to threads, this has a scaling problem of using O(t^2) space where t is threadcount.
 //Should numThreads be constant time or runtime? Idk. Feels like constant should work but runtime should be better so that say can query cpucount @ runtime
 
-constexpr float sizeOverhead = 5.0; //inverse of load factor. Keeping it const for now but probably make it configurable 
+constexpr float sizeOverhead = 100.0; //inverse of load factor. Keeping it const for now but probably make it configurable 
 
 enum class TryLockPossibilities {
     Success,
@@ -133,6 +133,7 @@ class HashMutex {
         void writeUnlock();
         void partialUpgradeUnlock();
         void readUnlock(size_t threadId);
+        size_t getId();
 
 };
 

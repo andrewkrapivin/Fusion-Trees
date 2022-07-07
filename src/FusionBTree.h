@@ -29,10 +29,11 @@ typedef struct ParallelFusionBNode {
     fusion_node fusion_internal_tree;
 	ParallelFusionBNode* children[MAX_FUSION_SIZE+1];
     // ReaderWriterLock mtx;
-    ReadWriteMutex mtx;
-    // HashMutex mtx; //todo!!
+    // ReadWriteMutex mtx;
+    HashMutex mtx; //todo!!
 
-    ParallelFusionBNode(size_t numThreads);
+    // ParallelFusionBNode(size_t numThreads);
+    ParallelFusionBNode(LockHashTable* table, size_t id);
     // ~parallelFusionBNode();
 } ParallelFusionBNode;
 
@@ -68,6 +69,7 @@ class ParallelFusionBTree {
         LockHashTable lockTable;
         ThreadedIdGenerator idGen;
         ParallelFusionBNode root;
+        vector<ofstream> debugFiles;
         // size_t thread_id;
 
     public:

@@ -91,7 +91,7 @@ __m512i* parallel_predecessor_DLock(BTState<NodeName, useLock, useHashLock> stat
 
 
 
-ParallelFusionBNode::ParallelFusionBNode(size_t numThreads): fusion_internal_tree(), mtx{numThreads} {
+ParallelFusionBNode::ParallelFusionBNode(LockHashTable* table, size_t id): fusion_internal_tree(), mtx{table, id} {
     for(int i=0; i<MAX_FUSION_SIZE+1; i++) {
         children[i] = NULL;
     }
@@ -103,20 +103,26 @@ ParallelFusionBNode::ParallelFusionBNode(size_t numThreads): fusion_internal_tre
 // }
 
 //probably need to figure out smth better than just hardcoding the 3 locks that a fusion tree thread can hold at a time (for hand over hand locking)
-ParallelFusionBTree::ParallelFusionBTree(size_t numThreads): numThreads{numThreads}, lockTable{numThreads, 3}, idGen{numThreads}, root{numThreads} {}
+ParallelFusionBTree::ParallelFusionBTree(size_t numThreads): numThreads{numThreads}, lockTable{numThreads, 3}, idGen{numThreads}, root{&lockTable, idGen(0)} {
+    cout << "FDFSDFSDF " << endl;
+    for(size_t i{0}; i < numThreads; i++) {
+        debugFiles.push_back(ofstream{string("debugLocks")+to_string(i)+string(".txt")});
+    }
+    // debugFiles.push_back(ofstream{"debugLocksWrite" + i + ".txt"});
+}
 
 void ParallelFusionBTree::insert(__m512i key, size_t threadId) {
-    BTState<ParallelFusionBNode, true, false> state(&root, numThreads, threadId, &lockTable, &idGen);
+    BTState<ParallelFusionBNode, true, true> state(&root, numThreads, threadId, &lockTable, &idGen, &debugFiles[threadId]);
     parallel_insert_full_tree_DLock(state, key);
 }
 
 __m512i* ParallelFusionBTree::successor(__m512i key, size_t threadId) {
-    BTState<ParallelFusionBNode, true, false> state(&root, numThreads, threadId, &lockTable, &idGen);
+    BTState<ParallelFusionBNode, true, true> state(&root, numThreads, threadId, &lockTable, &idGen, &debugFiles[threadId]);
     return parallel_successor_DLock(state, key);
 }
 
 __m512i* ParallelFusionBTree::predecessor(__m512i key, size_t threadId) {
-    BTState<ParallelFusionBNode, true, false> state(&root, numThreads, threadId, &lockTable, &idGen);
+    BTState<ParallelFusionBNode, true, true> state(&root, numThreads, threadId, &lockTable, &idGen, &debugFiles[threadId]);
     return parallel_predecessor_DLock(state, key);
 }
 

@@ -4,12 +4,14 @@
 #include <immintrin.h>
 #include <cstdint>
 #include <iostream>
+#include <fstream>
 #include "lock.h"
 #include "fusion_tree.h"
 #include "HashLocks.hpp"
 #include "ThreadedIdGenerator.hpp"
 
 //TODO: generalize this template for any kind of B-tree so that could do some comparative testing.
+using namespace std;
 
 template<typename NT, bool useLock = true, bool useHashLock = false> //NT--node type.
 //NT MUST have fusion_internal_tree, children, mtx somewhere in it. I don't know how to restrict it so that that is the case, but just this is a thing. Basically, it must be related to parallel_fusion_b_node, but it can also be the variable size one
@@ -34,9 +36,10 @@ struct BTState {
     size_t threadId;
     LockHashTable* lockTable;
     ThreadedIdGenerator* idGen;
+    ofstream* debug;
     // template<bool HP> NT (*extra_splitting)(NT*, NT*, NT*);
     BTState(NT* root, size_t numThreads, size_t threadId);
-    BTState(NT* root, size_t numThreads, size_t threadId, LockHashTable* lockTable, ThreadedIdGenerator* idGen);
+    BTState(NT* root, size_t numThreads, size_t threadId, LockHashTable* lockTable, ThreadedIdGenerator* idGen, ofstream* debug = NULL);
     // template<bool HP> bool try_upgrade_reverse_order(); //HP: has par
     // template<bool HP> void read_unlock_both();
     // template<bool HP> void write_unlock_both();
@@ -72,11 +75,20 @@ BTState<NT, useLock, useHashLock>::BTState(NT* root, size_t numThreads, size_t t
 }
 
 template<typename NT, bool useLock, bool useHashLock>
-BTState<NT, useLock, useHashLock>::BTState(NT* root, size_t numThreads, size_t threadId, LockHashTable* lockTable, ThreadedIdGenerator* idGen): cur(root), par(NULL), numThreads(numThreads), threadId(threadId), lockTable{lockTable}, idGen{idGen} {
+BTState<NT, useLock, useHashLock>::BTState(NT* root, size_t numThreads, size_t threadId, LockHashTable* lockTable, ThreadedIdGenerator* idGen, ofstream* debug): cur(root), par(NULL), numThreads(numThreads), threadId(threadId), lockTable{lockTable}, idGen{idGen}, debug{debug} {
     // if constexpr (useLock)
     //     read_lock(&cur->mtx, WAIT_FOR_LOCK, thread_id);
-    if constexpr (useLock)
+    if constexpr (useLock) {
+        if(debug) {
+            if constexpr (useHashLock)
+                *debug << "Read locking " << cur->mtx.getId() << endl;
+        }
         cur->mtx.readLock(threadId);
+        if(debug) {
+            if constexpr (useHashLock)
+                *debug << "Finished read lock" << endl;
+        }
+    }
 }
 
 template<typename NT, bool useLock, bool useHashLock>
@@ -100,21 +112,70 @@ bool BTState<NT, useLock, useHashLock>::try_upgrade_reverse_order() {
         // finish_partial_upgrade(&par->mtx);
         // finish_partial_upgrade(&cur->mtx);
         // return true;
+        if(debug) {
+            if constexpr (useHashLock)
+                *debug << "Trying partial upgrade of " << cur->mtx.getId() << endl;
+        }
         if(!cur->mtx.tryPartialUpgrade(threadId)) {
-            if(par != NULL)
+            if(debug) {
+                if constexpr (useHashLock)
+                    *debug << "Failed" << endl;
+            }
+            if(par != NULL) {
+                if(debug) {
+                    if constexpr (useHashLock)
+                        *debug << "Read unlocking " << par->mtx.getId() << endl;
+                }
                 par->mtx.readUnlock(threadId);
+                if(debug) {
+                    if constexpr (useHashLock)
+                        *debug << "Finished" << endl;
+                }
+            }
             return false;
         }
+        if(debug) {
+            if constexpr (useHashLock)
+                *debug << "Succeeded" << endl;
+        }
         if (par == NULL) {
+            if(debug) {
+                if constexpr (useHashLock)
+                    *debug << "Finishing partial upgrade of " << cur->mtx.getId() << endl;
+            }
             cur->mtx.finishPartialUpgrade();
+            if(debug) {
+                if constexpr (useHashLock)
+                    *debug << "Finished" << endl;
+            }
             return true;
         }
+        if(debug) {
+            if constexpr (useHashLock)
+                *debug << "Trying partial upgrade of " << par->mtx.getId() << endl;
+        }
         if(!par->mtx.tryPartialUpgrade(threadId)) {
+            if(debug) {
+                if constexpr (useHashLock)
+                    *debug << "Failed" << endl;
+            }
             cur->mtx.partialUpgradeUnlock();
+            if(debug) {
+                if constexpr (useHashLock)
+                    (*debug) << "Finished partial upgrade unlock of " << cur->mtx.getId() << endl;
+            }
             return false;
         }
         par->mtx.finishPartialUpgrade();
+        if(debug) {
+            if constexpr (useHashLock)
+                (*debug) << "Finished partial upgrade unlock of " << par->mtx.getId() << endl;
+        }
         cur->mtx.finishPartialUpgrade();
+        if(debug) {
+            if constexpr (useHashLock)
+                (*debug) << "Finished partial upgrade unlock of " << cur->mtx.getId() << endl;
+        }
         return true;
     }
     return true;

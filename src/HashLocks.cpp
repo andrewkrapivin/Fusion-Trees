@@ -1,6 +1,7 @@
 #include "HashLocks.hpp"
 #include <random>
 #include <chrono>
+#include <iostream>
 #include <immintrin.h>
 #include <cassert>
 
@@ -524,6 +525,10 @@ void HashMutex::readUnlock(size_t threadId) {
     table->readUnlock(id, threadId);
 }
 
+size_t HashMutex::getId() {
+    return id;
+}
+
 
 
 HashLock::HashLock(LockHashTable* table, size_t id, size_t threadId): table(table), id(id), threadId(threadId), curLockType(LockType::Unlocked) {}
@@ -550,7 +555,7 @@ HashLock& HashLock::operator=(HashLock&& a) {
     //         partialUpgradeUnlock();
     //         break;
     // }
-        bool tryReadLock(size_t threadId);
+        // bool tryReadLock(size_t threadId);
     unlock();
 
     //Seems this code is a bit repetitive with the move one? Combine somehow?
