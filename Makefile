@@ -1,5 +1,6 @@
 CXX = g++-11
-CXXFLAGS = -pthread -MMD -MP -march=icelake-client -std=c++20 -O0 -ggdb -Wall -W
+#CXXFLAGS = -pthread -MMD -MP -march=icelake-client -std=c++20 -O0 -ggdb -Wall -W
+CXXFLAGS = -pthread -MMD -MP -march=icelake-client -std=c++20 -O2 -Wall -W
  
 SRCDIR = src
 OBJDIR = bin
