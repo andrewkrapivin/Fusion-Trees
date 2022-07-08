@@ -57,8 +57,14 @@ LockHashTable::HashIds::HashIds(LockHashTable* h, size_t id) {
     // readEntry2 = writeEntry2 & ((1ull << h->numReadBits) - 1);
 
     lockWriteLockEntry = h->hashFunc(id);
+    // std::cout << "lwle: " << lockWriteLockEntry << ", s: " << h->lockWriteLocks.size() << ", nwb: " << h->numWriteBits << std::endl;
+    assert(lockWriteLockEntry >= 0 && lockWriteLockEntry < h->lockWriteLocks.size());
     readLockEntry = (lockWriteLockEntry & ((1ull << h->numReadBits) - 1)) * h->associativityCacheLines;
+    assert(readLockEntry >= 0 && readLockEntry < h->readLocks[0].size());
+    // assert(readLockEntry == 0);
     writeLockEntry = lockWriteLockEntry * h->associativityCacheLines;
+    assert(writeLockEntry >= 0 && writeLockEntry < h->writeLocks.size());
+    // assert(writeLockEntry == 0);
 }
 
 LockHashTable::LockHashTable(size_t numThreads, size_t locksPerThread, size_t associativity /*= 8*/): 
@@ -67,14 +73,16 @@ hashFunc{64 - _lzcnt_u64(numThreads * locksPerThread * sizeOverhead - 1)} {
     // associativity = associativityCacheLines * PackedLockUnit::numLocks;
     size_t numReadLocksPerThread = locksPerThread * sizeOverhead;
     size_t numWriteLocks = numThreads * numReadLocksPerThread;
+    // std::cout << "numReadLocksPerThread " << numReadLocksPerThread << std::endl;
+    // std::cout << "numWriteLocks " << numWriteLocks << std::endl;
     numWriteBits = 64 - _lzcnt_u64(numWriteLocks-1);
     numReadBits = 64 - _lzcnt_u64(numReadLocksPerThread-1);
     // hashFunc{numWriteBits}; //Annoyng that I cannot just do this. Should be a way to delay initialization of objects until the constructor body (make it explicit, and then the compiler throws error if you forget to initialize in the body)
     //Just gonna do linear probing. Nice & easy.
     // h1{numWriteBits};
     // h2{numWriteBits};
-    numReadLocksPerThread = 1ull << numWriteBits; //taking the smallest power of 2 at least equal to the desired amount
-    numWriteLocks = 1ull << numReadBits;
+    numReadLocksPerThread = 1ull << numReadBits; //taking the smallest power of 2 at least equal to the desired amount
+    numWriteLocks = 1ull << numWriteBits;
     // writeLocks1 = vector<LockUnit>(numWriteLocks);
     // writeLocks2 = vector<LockUnit>(numWriteLocks);
     // writeLockModifyLocks1 = vector<LockUnit>(numWriteLocks);
@@ -85,6 +93,9 @@ hashFunc{64 - _lzcnt_u64(numThreads * locksPerThread * sizeOverhead - 1)} {
     for(size_t i{0}; i < numThreads; i++) {
         readLocks[i] = std::vector<PackedLockUnit>(numReadLocksPerThread*associativityCacheLines); //These obviously don't need to be as big since as opposed to having up to threadCount*locksPerThread items in the hash table at a time, it just has locksPerThread, but for now this is as it is
     }
+    // std::cout << "associativity cache lines " << associativityCacheLines << std::endl;
+    // std::cout << "num read bits " << numReadBits << std::endl;
+    // std::cout << "num write bits " << numWriteBits << std::endl;
 }
 
 void LockHashTable::getWriteLock(size_t id) {
@@ -92,6 +103,7 @@ void LockHashTable::getWriteLock(size_t id) {
 
     WriteMutex& wlockLock = lockWriteLocks[hIds.lockWriteLockEntry];
     wlockLock.lock(); //lock lock lock
+    // std::cout << "Got wlocklock for " << id << std::endl;
 
     bool acquiredLock = false;
     // size_t newVal = id;
@@ -119,10 +131,15 @@ void LockHashTable::getWriteLock(size_t id) {
     }
 
     if(!acquiredLock) {
+        std::cout << "ACQUIRE LOCK FAILED" << std::endl;
         exit(EXIT_FAILURE);  //Don't do this. Rebuild the hash table lol or something in this case. Or just do something to wait for locks to be released.
     }
 
+    // std::cout << "Writelocked " << id << std::endl;
+
     wlockLock.unlock(); //This releases so all the relaxed commits should be visible to others
+    // numWriteLocksHeld++;
+    // assert(numWriteLocksHeld <= 3);
 }
 
 TryLockPossibilities LockHashTable::tryGetWriteLock(size_t id) {
@@ -131,12 +148,16 @@ TryLockPossibilities LockHashTable::tryGetWriteLock(size_t id) {
     WriteMutex& wlockLock = lockWriteLocks[hIds.lockWriteLockEntry];
     wlockLock.lock();
 
+    // std::cout << "Got wlocklock for " << id << std::endl;
+    assert(id != 0);
+
     bool acquiredLock = false;
     for(size_t cl{0}; cl < associativityCacheLines; cl++) {
         PackedLockUnit& writeLock = writeLocks[hIds.writeLockEntry+cl];
         for(auto& x: writeLock.lockIds) {
             uint64_t val = x.load(std::memory_order_relaxed);
             if(val == id) {
+                // exit(2);
                 wlockLock.unlock();
                 return TryLockPossibilities::WriteLocked;
             }
@@ -152,10 +173,26 @@ TryLockPossibilities LockHashTable::tryGetWriteLock(size_t id) {
     }
 
     if(!acquiredLock) {
+        exit(3);
         return TryLockPossibilities::LocksBusy;
     }
 
+    size_t counter{0};
+    for(size_t cl{0}; cl < associativityCacheLines; cl++) {
+        PackedLockUnit& writeLock = writeLocks[hIds.writeLockEntry+cl];
+        for(auto& x: writeLock.lockIds) {
+            // assert(x.load(std::memory_order_relaxed) != id);
+            // assert(x.load(std::memory_order_relaxed) == 0 || counter < 3);
+            counter+= x.load(std::memory_order_relaxed) == id;
+        }
+    }
+    assert(counter == 1);
+
     wlockLock.unlock();
+
+    // numWriteLocksHeld++;
+    // assert(numWriteLocksHeld <= 3);
+    // std::cout << "Writelocked " << id << std::endl;
 
     return TryLockPossibilities::Success;
 }
@@ -193,7 +230,7 @@ std::atomic<uint64_t>* LockHashTable::getReadLock(size_t id, size_t threadId) {
         }
     }
 
-    exit(EXIT_FAILURE); //again lol
+    exit(4); //again lol
     // return nullptr; //Is this line necessary?
 }
 
@@ -219,6 +256,7 @@ std::atomic<uint64_t>* LockHashTable::tryGetReadLock(size_t id, size_t threadId,
 
 //This function can introduce deadlocks even where there would be none without the hash table, but should be rare.
 void LockHashTable::writeLock(size_t id) {
+    // std::cout << "Writelocking " << id << std::endl;
 
     // LockUnit& wlock1 = writeLocks[hIds.writeEntry1];
     // LockUnit& wlock2 = writeLocks[hIds.writeEntry2];
@@ -253,6 +291,7 @@ void LockHashTable::writeLock(size_t id) {
 }
 
 TryLockPossibilities LockHashTable::tryWriteLock(size_t id) {
+    // std::cout << "Trying to writelock " << id << std::endl;
     TryLockPossibilities retval = tryGetWriteLock(id);
     if(retval != TryLockPossibilities::Success) {
         return retval;
@@ -264,13 +303,17 @@ TryLockPossibilities LockHashTable::tryWriteLock(size_t id) {
 }
 
 void LockHashTable::partialUpgrade(size_t id, size_t threadId) {
+    // std::cout << "Partial upgrading " << id << " by thread " << threadId << std::endl;
     getWriteLock(id);
     readUnlock(id, threadId);
 }
 
 TryLockPossibilities LockHashTable::tryPartialUpgrade(size_t id, size_t threadId, bool unlockOnFail /*= true*/) {
+    // std::cout << "Trying to partial upgrade " << id << " by thread " << threadId << std::endl;
     TryLockPossibilities retval = tryGetWriteLock(id);
     if(retval != TryLockPossibilities::Success) {
+        // std::cout << "Failed to partial upgrade" << std::endl;
+        // exit(EXIT_FAILURE);
         if(unlockOnFail) {
             readUnlock(id, threadId);
         }
@@ -282,10 +325,12 @@ TryLockPossibilities LockHashTable::tryPartialUpgrade(size_t id, size_t threadId
 }
 
 void LockHashTable::finishPartialUpgrade(size_t id) {
+    // std::cout << "Finishing partial upgrade of " << id << std::endl;
     waitForReadLocks(id);
 }
 
 void LockHashTable::readLock(size_t id, size_t threadId) {
+    // std::cout << "Readlocking " << id << " by thread " << threadId << std::endl;
     std::atomic<uint64_t>* readLock = getReadLock(id, threadId);
 
     HashIds hIds(this, id); //should probably make this class like an actual entry or something to not recalculate this twice, unless compiler optimizes it away
@@ -309,9 +354,12 @@ void LockHashTable::readLock(size_t id, size_t threadId) {
 }
 
 TryLockPossibilities LockHashTable::tryReadLock(size_t id, size_t threadId) {
+    // std::cout << "Trying to readlock " << id << " by thread " << threadId << std::endl;
     TryLockPossibilities status = TryLockPossibilities::Success;
     std::atomic<uint64_t>* readLock = tryGetReadLock(id, threadId, status);
     if(status != TryLockPossibilities::Success) {
+        if(status == TryLockPossibilities::LocksBusy)
+            exit(6);
         return status;
     }
 
@@ -323,6 +371,8 @@ TryLockPossibilities LockHashTable::tryReadLock(size_t id, size_t threadId) {
             uint64_t val = x.load(std::memory_order_acquire);
             if(val == id) {
                 readLock->store(0, std::memory_order_release);
+                // std::cout << "Failed to lock cause node is write locked by another thread " << id << std::endl;
+                // exit(EXIT_FAILURE);
                 return TryLockPossibilities::WriteLocked;
             }
             if(val == 0) {
@@ -335,6 +385,7 @@ TryLockPossibilities LockHashTable::tryReadLock(size_t id, size_t threadId) {
 }
 
 void LockHashTable::writeUnlock(size_t id) {
+    // std::cout << "Write unlocking " << id << std::endl;
     HashIds hIds(this, id);
 
     WriteMutex& wlockLock = lockWriteLocks[hIds.lockWriteLockEntry];
@@ -346,21 +397,37 @@ void LockHashTable::writeUnlock(size_t id) {
         for(auto& x: writeLock.lockIds) {
             if(prevVal != nullptr) {
                 prevVal->store(x.load(std::memory_order_relaxed), std::memory_order_release); //Don't this that it can be relaxed, cause might mess up read threads.
+                prevVal = &x;
             }
             else if(x.load(std::memory_order_relaxed) == id) {
                 prevVal = &x;
             }
         }
     }
+    assert(prevVal != NULL); //means you didn't hold the lock which is undefined behavior
+    prevVal->store(0, std::memory_order_release);
+
+    size_t counter{0};
+    for(size_t cl{0}; cl < associativityCacheLines; cl++) {
+        PackedLockUnit& writeLock = writeLocks[hIds.writeLockEntry+cl];
+        for(auto& x: writeLock.lockIds) {
+            assert(x.load(std::memory_order_relaxed) != id);
+            // assert(x.load(std::memory_order_relaxed) == 0 || counter < 3);
+            counter++;
+        }
+    }
 
     wlockLock.unlock();
+    // numWriteLocksHeld--;
 }
 
 void LockHashTable::partialUpgradeUnlock(size_t id) { //actually the same (for now) as write unlock
+    // std::cout << "Partial upgrade unlocking " << id << std::endl;
     writeUnlock(id);
 }
 
 void LockHashTable::readUnlock(size_t id, size_t threadId) {
+    // std::cout << "Read unlocking " << id << " by thread " << threadId << std::endl;
     HashIds hIds(this, id);
     for(size_t cl{0}; cl < associativityCacheLines; cl++) {
         PackedLockUnit& readLock = readLocks[threadId][hIds.readLockEntry+cl];

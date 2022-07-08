@@ -86,6 +86,8 @@ int main(int argc, char** argv) {
     }
     bench.timeThreadedFunction("parallel insert");
 
+    // exit(0);
+
     bench.timeFunction([&] ()-> void {
         sort(big_randomlist, big_randomlist+bigtestsize, fast_compare__m512i);
     }, "sort on big keys");

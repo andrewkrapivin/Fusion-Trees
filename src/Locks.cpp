@@ -2,10 +2,21 @@
 #include <iostream>
 #include <cassert>
 
+PackedLockUnit::PackedLockUnit() {
+    for(std::atomic<uint64_t>& lockId: lockIds) {
+        lockId.store(0, std::memory_order_release);
+    }
+}
+
+
 void WriteMutex::lock() {
     // Should I use compare_exchange or exchange? Cause here can have weaker memory order on fail, so could be faster?
-    while(wlUnit.lockId.exchange(1, std::memory_order_acquire) == 0) {
-        while(wlUnit.lockId.load(std::memory_order_relaxed) == 0);
+    // while(wlUnit.lockId.exchange(1, std::memory_order_acquire) == 0) {
+    //     while(wlUnit.lockId.load(std::memory_order_relaxed) == 0);
+    // }
+    uint64_t expected = 0;
+    while(!wlUnit.lockId.compare_exchange_weak(expected, 1, std::memory_order_acquire, std::memory_order_relaxed)) {
+        expected = 0;
     }
 }
 

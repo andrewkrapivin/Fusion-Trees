@@ -34,7 +34,7 @@ typedef struct ParallelFusionBNode {
 
     // ParallelFusionBNode(size_t numThreads);
     ParallelFusionBNode(LockHashTable* table, size_t id);
-    // ~parallelFusionBNode();
+    // ~ParallelFusionBNode();
 } ParallelFusionBNode;
 
 // Implementation question: how to make these two data structures the same size? Since they have exactly the same data?

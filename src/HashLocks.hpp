@@ -5,6 +5,11 @@
 #include <vector>
 #include <array>
 
+//Really simple fix to all these problems:
+//Just since doing HOH locking, have like say four hash tables where the lcoks are for depth mod 4, so then you don't have any deadlocking problems.
+//And here you don't care about running out of space in an entry at all.
+
+
 //Biggest potential problem: deadlocking & adjacent nodes (parent/child) colliding?
 //For deadlock: like say one thread does P-C, and trying to get CC 
 //Another thread has CC-CCC and trying to get CCCC
@@ -34,7 +39,7 @@
 //Since size of lock is proportional to threads, this has a scaling problem of using O(t^2) space where t is threadcount.
 //Should numThreads be constant time or runtime? Idk. Feels like constant should work but runtime should be better so that say can query cpucount @ runtime
 
-constexpr float sizeOverhead = 100.0; //inverse of load factor. Keeping it const for now but probably make it configurable 
+constexpr float sizeOverhead = 1.0; //inverse of load factor. Keeping it const for now but probably make it configurable 
 
 enum class TryLockPossibilities {
     Success,
@@ -72,6 +77,7 @@ class BasicHashFunction {
 //The scheme would just be to have a global lock for the hash table, and make every function get read access for it
 class LockHashTable {
     private:
+        // size_t numWriteLocksHeld{0};
         size_t numWriteBits, numReadBits;
         // vector<LockUnit> writeLockModifyLocks1; //Terrible name lol. These are used to do the Cuckoo insertions, since here we need to move around. Not for deletions. Design requires this, which is why cuckoo was chosen
         // vector<LockUnit> writeLockModifyLocks2;
@@ -102,7 +108,7 @@ class LockHashTable {
         std::atomic<uint64_t>* tryGetReadLock(size_t id, size_t threadId, TryLockPossibilities& status);
 
     public:
-        LockHashTable(size_t numThreads, size_t locksPerThread, size_t associativity = 8);
+        LockHashTable(size_t numThreads, size_t locksPerThread, size_t associativity = 3); //default associativity should be 8
         void writeLock(size_t id);
         TryLockPossibilities tryWriteLock(size_t id); //Change the size_t here to uint64_t since I use that to index everything. Idk why I chose size_t in the first place, or choose size_t for the atomic units.
         void partialUpgrade(size_t id, size_t threadId);

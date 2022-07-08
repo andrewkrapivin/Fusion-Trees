@@ -20,7 +20,7 @@ struct alignas(64) PackedLockUnit { //This struct should be a typedef I'm being 
     using iterator=typename container::iterator;
     using const_iterator=typename container::const_iterator;
     // std::atomic<uint64_t> lockId[numLocks];
-    container lockIds = {};
+    container lockIds;
     iterator begin() {
         return lockIds.begin();
     }
@@ -33,6 +33,7 @@ struct alignas(64) PackedLockUnit { //This struct should be a typedef I'm being 
     const_iterator cend() const {
         return lockIds.cend();
     }
+    PackedLockUnit();
 };
 
 class alignas(64) WriteMutex {

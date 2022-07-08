@@ -58,6 +58,7 @@ struct BTState {
     // template<void (*ETS)(NT*, NT*, NT*) = [](NT* cur, NT* lc, NT* rc) -> void {}> bool split_if_needed();
     bool try_insert_key(__m512i key, bool auto_unlock = true);
     bool try_HOH_readlock(NT* child); //unlocks everything on failure
+    //TODO: be consistent w/ naming & change these function names
 
     private:
         NT* initNode();
@@ -293,6 +294,8 @@ bool BTState<NT, useLock, useHashLock>::split_if_needed(void ETS(NT*, NT*, NT*, 
         }
         else {
             // std::cout << "WHAT" << std::endl;
+            if constexpr (useLock) 
+                cur->mtx.writeUnlock();
             delete cur;
         }
         if constexpr (useLock) {
