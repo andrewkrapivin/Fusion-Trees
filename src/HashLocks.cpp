@@ -46,6 +46,151 @@ size_t BasicHashFunction::operator() (uint64_t id) {
     return getBits(id);
 }
 
+SimpleHashFunction::SimpleHashFunction(size_t numBits): numBits{numBits} {
+    assert(numBits <= maxbits);
+    std::random_device rd;
+    std::mt19937 generator{rd()};
+    std::uniform_int_distribution<size_t> dist(0, (1ull << numBits) - 1);
+    a = dist(generator);
+    b = dist(generator);
+    a = a*2 - 1;
+    b = b*2 - 1;
+}
+
+uint64_t SimpleHashFunction::getBits(uint64_t id) {
+    id >>= 6; //using alligned memory so we can assume pointers are a multiple of 64.
+    uint64_t lowerBits = id & ((1ull << 32) - 1);
+    uint64_t higherBits = id >> 32;
+    uint64_t hash = lowerBits * a + higherBits*b;
+    hash = hash & ((1ull << numBits) - 1);
+    // std::cout << id << " lowerBits " << lowerBits << " higherBits: " << higherBits << ", a: " << a << ", b: " << b << std::endl;
+    // std::cout << hash << std::endl;
+    return hash;
+}
+
+size_t SimpleHashFunction::operator() (uint64_t id) {
+    return getBits(id);
+}
+
+
+
+SimpleLockHashTable::SimpleLockHashTable(size_t numThreads): numThreads{numThreads}, numBits{64 - _lzcnt_u64(numThreads*sizeOverhead-1)}, writeLocks{(1ull << numBits)}, readLocks{numThreads}, hashFunc{numBits} {}
+
+void SimpleLockHashTable::getWriteLock(size_t id) {
+    size_t index = hashFunc.getBits(id);
+    LockUnit& wlUnit = writeLocks[index];
+    uint64_t expected = 0;
+    while(!wlUnit.lockId.compare_exchange_weak(expected, id, std::memory_order_acquire, std::memory_order_relaxed)) {
+        expected = 0;
+    }
+}
+
+TryLockPossibilities SimpleLockHashTable::tryGetWriteLock(size_t id) {
+    size_t index = hashFunc.getBits(id);
+    LockUnit& wlUnit = writeLocks[index];
+    uint64_t expected = 0;
+    if(!wlUnit.lockId.compare_exchange_strong(expected, id, std::memory_order_acquire, std::memory_order_relaxed)) {
+        if(expected == id) {
+            return TryLockPossibilities::WriteLocked;
+        }
+        else {
+            return TryLockPossibilities::LocksBusy;
+        }
+    }
+
+    return TryLockPossibilities::Success;
+}
+
+void SimpleLockHashTable::waitForReadLocks(size_t id) {
+    for(auto& rlUnit: readLocks) {
+        while(rlUnit.lockId.load(std::memory_order_relaxed) == id);
+    }
+}
+
+void SimpleLockHashTable::writeLock(size_t id) {
+    getWriteLock(id);
+    waitForReadLocks(id);
+}
+
+TryLockPossibilities SimpleLockHashTable::tryWriteLock(size_t id) {
+    TryLockPossibilities retval = tryGetWriteLock(id);
+
+    if(retval != TryLockPossibilities::Success) {
+        return retval;
+    }
+    
+    waitForReadLocks(id);
+    return TryLockPossibilities::Success;
+}
+
+void SimpleLockHashTable::partialUpgrade(size_t id, size_t threadId) {
+    getWriteLock(id);
+    readUnlock(id, threadId);
+}
+
+TryLockPossibilities SimpleLockHashTable::tryPartialUpgrade(size_t id, size_t threadId, bool unlockOnFail) {
+    TryLockPossibilities retval = tryGetWriteLock(id);
+    if(retval != TryLockPossibilities::Success) {
+        if(unlockOnFail) {
+            readUnlock(id, threadId);
+        }
+        return retval;
+    }
+
+    readUnlock(id, threadId);
+    return TryLockPossibilities::Success;
+}
+
+void SimpleLockHashTable::finishPartialUpgrade(size_t id) {
+    waitForReadLocks(id);
+}
+
+void SimpleLockHashTable::readLock(size_t id, size_t threadId) {
+    size_t windex = hashFunc.getBits(id);
+    LockUnit& wlUnit = writeLocks[windex];
+    LockUnit& rlUnit = readLocks[threadId];
+
+    rlUnit.lockId.store(id, std::memory_order_release);
+    while(wlUnit.lockId.load(std::memory_order_acquire) != 0) {
+        rlUnit.lockId.store(0, std::memory_order_relaxed);
+        while(wlUnit.lockId.load(std::memory_order_relaxed) != 0);
+        rlUnit.lockId.store(id, std::memory_order_release);
+    }
+}
+
+TryLockPossibilities SimpleLockHashTable::tryReadLock(size_t id, size_t threadId) {
+    size_t windex = hashFunc.getBits(id);
+    LockUnit& wlUnit = writeLocks[windex];
+    LockUnit& rlUnit = readLocks[threadId];
+
+    rlUnit.lockId.store(id, std::memory_order_release);
+    uint64_t cId = wlUnit.lockId.load(std::memory_order_acquire);
+    if(cId != 0) {
+        rlUnit.lockId.store(0, std::memory_order_release);
+        if(cId == id)
+            return TryLockPossibilities::WriteLocked;
+        return TryLockPossibilities::LocksBusy;
+    }
+
+    return TryLockPossibilities::Success;
+}
+
+
+//for this table id is not necesary for unlocks--remove??
+void SimpleLockHashTable::writeUnlock(size_t id) {
+    writeLocks[hashFunc.getBits(id)].lockId.store(0, std::memory_order_release);
+}
+
+void SimpleLockHashTable::partialUpgradeUnlock(size_t id) {
+    writeUnlock(id);
+}
+
+void SimpleLockHashTable::readUnlock(size_t id, size_t threadId) {
+    readLocks[threadId].lockId.store(0, std::memory_order_release);
+}
+
+
+
 LockHashTable::HashIds::HashIds(LockHashTable* h, size_t id) {
     // writeEntry = h->hashFunc(id);
     // readEntry = writeEntry & ((1ull << h->numReadBits) - 1);
@@ -549,7 +694,7 @@ void LockHashTable::readUnlock(size_t id, size_t threadId) {
 //     holdingLock = status == TryLockPossibilities::Success;
 // }
 
-HashMutex::HashMutex(LockHashTable* table, size_t id) : table(table), id(id) {}
+HashMutex::HashMutex(SimpleLockHashTable* table, size_t id) : table(table), id(id) {}
 
 void HashMutex::writeLock() {
     table->writeLock(id);
@@ -771,4 +916,21 @@ void HashLock::readUnlock() {
     if(threadId == -1ull) return;
     table->readUnlock(id, threadId);
     curLockType = LockType::Unlocked;
+}
+
+
+//returns smallest power of two not smaller than num
+size_t nearestPowerOfTwo(size_t num) {
+    return 1ull << (64 - _lzcnt_u64(num - 1));
+}
+
+StripedLockTable::StripedLockTable(size_t numThreads, size_t numLocksPerThread) {
+    for(size_t i=0; i < nearestPowerOfTwo(numLocksPerThread); i++) { //dumb that this is necessary. why doesn't vector call the constructor but rather tries to implicitly convert? WTAF?
+        lockTables.push_back(SimpleLockHashTable{numThreads});
+    }
+}
+
+HashMutex StripedLockTable::getMutex(size_t id, size_t stripeId) {
+    stripeId = stripeId & (lockTables.size()-1);
+    return HashMutex(&lockTables[stripeId], id);
 }

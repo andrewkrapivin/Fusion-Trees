@@ -39,8 +39,6 @@
 //Since size of lock is proportional to threads, this has a scaling problem of using O(t^2) space where t is threadcount.
 //Should numThreads be constant time or runtime? Idk. Feels like constant should work but runtime should be better so that say can query cpucount @ runtime
 
-constexpr float sizeOverhead = 1.0; //inverse of load factor. Keeping it const for now but probably make it configurable 
-
 enum class TryLockPossibilities {
     Success,
     WriteLocked, //Returns if the actual write lock you want (that is, the one with the same id) is held
@@ -72,11 +70,60 @@ class BasicHashFunction {
         
 };
 
+class SimpleHashFunction {
+    private:
+        //Idk what hash function to use. Let's do this super space inneficient one, which seems pretty good though even on theoretical basis? Idk about that but well it certainly has a lot of random bits
+        //Lol but 2KB for just 8 bits of randomness at the end is absurd. Whatever
+        //Def improve this if plan to use it more than like once
+        static constexpr size_t maxbits = 30;
+        size_t numBits;
+        size_t a, b;
+    
+    public:
+        SimpleHashFunction(size_t numBits);
+        uint64_t getBits(uint64_t id);
+        size_t operator() (uint64_t id);
+        
+};
+
+//This lock hash table is designed for head over head locking or any similar scheme (each "rung" of the HOH scheme gets its own hash table, so three total):
+//where basically each lock hash table will be used for just ONE lock per thread, and deadlocks arising from hashing two locks to the same location in a hash table cannot arise
+//(in HOH, we would have three hash tables, and even if two different nodes hash to the same entry we do not create a lock loop since we do not effectively lock deep enough to cause a problem--better explained in a diagram)
+//One thing maybe still todo here is doing as the LockHashTable having separate read and write locks just to reduce memusage.
+class SimpleLockHashTable {
+    private:
+        static constexpr size_t sizeOverhead = 10;
+        size_t numThreads;
+        size_t numBits;
+        std::vector<LockUnit> writeLocks;
+        std::vector<LockUnit> readLocks; //lol don't just have one readlock per thread cause then writelocking becomes super expensive!!!
+        SimpleHashFunction hashFunc;
+        void getWriteLock(size_t id);
+        TryLockPossibilities tryGetWriteLock(size_t id);
+        void waitForReadLocks(size_t id);
+        
+
+    public:
+        SimpleLockHashTable() = delete;
+        SimpleLockHashTable(size_t numThreads);
+        void writeLock(size_t id);
+        TryLockPossibilities tryWriteLock(size_t id);
+        void partialUpgrade(size_t id, size_t threadId);
+        TryLockPossibilities tryPartialUpgrade(size_t id, size_t threadId, bool unlockOnFail = true);
+        void finishPartialUpgrade(size_t id);
+        void readLock(size_t id, size_t threadId);
+        TryLockPossibilities tryReadLock(size_t id, size_t threadId);
+        void writeUnlock(size_t id);
+        void partialUpgradeUnlock(size_t id);
+        void readUnlock(size_t id, size_t threadId);
+};
+
 //Build in scheme to rebuild the hash table? Cause honestly probably most of the time you have the LocksBusy thing happen the locks you use later change and so its all good, but sometimes its gonna be two popular locks colliding, and then I'd imagine that's a problem.
 //Or some deadlock situtation could also happen, which is the real problem.
 //The scheme would just be to have a global lock for the hash table, and make every function get read access for it
 class LockHashTable {
     private:
+        static constexpr float sizeOverhead = 2.0; //inverse of load factor. Keeping it const for now but probably make it configurable 
         // size_t numWriteLocksHeld{0};
         size_t numWriteBits, numReadBits;
         // vector<LockUnit> writeLockModifyLocks1; //Terrible name lol. These are used to do the Cuckoo insertions, since here we need to move around. Not for deletions. Design requires this, which is why cuckoo was chosen
@@ -90,7 +137,7 @@ class LockHashTable {
         std::vector<std::vector<PackedLockUnit>> readLocks; //Here its probably ideal to do PackedLockUnit but not sure cause it still could slow down the writers
         //readLocks have the first  dimension is set by the threadId, then next is the actual read lock we want
         // BasicHashFunction h1, h2;
-        BasicHashFunction hashFunc;
+        SimpleHashFunction hashFunc;
         struct HashIds {
             // uint64_t writeEntry1, writeEntry2;
             // uint64_t readEntry1, readEntry2;
@@ -104,7 +151,7 @@ class LockHashTable {
         void getWriteLock(size_t id);
         TryLockPossibilities tryGetWriteLock(size_t id);
         void waitForReadLocks(size_t id);
-        std::atomic<uint64_t>* getReadLock(size_t id, size_t threadId);
+        std::atomic<uint64_t>* getReadLock(size_t id, size_t threadId); //so awful
         std::atomic<uint64_t>* tryGetReadLock(size_t id, size_t threadId, TryLockPossibilities& status);
 
     public:
@@ -122,13 +169,15 @@ class LockHashTable {
         void readUnlock(size_t id, size_t threadId);
 };
 
+//Template this? Since have several different hash table designs.
 class HashMutex {
     private:
-        LockHashTable* table;
+        SimpleLockHashTable* table;
         size_t id;
 
     public:
-        HashMutex(LockHashTable* table, size_t id);
+        HashMutex() {} //Delete later when done transitioning
+        HashMutex(SimpleLockHashTable* table, size_t id);
         void writeLock();
         bool tryWriteLock();
         void partialUpgrade(size_t threadId);
@@ -173,6 +222,21 @@ class HashLock {
         void partialUpgradeUnlock();
         void readUnlock();
         void unlock(); //Automatically just sees what it needs to unlock.
+
+};
+
+//Encapsulating stuff like HOH locking, which would work as so in the B-trees:
+//Every node needs to know its depth d
+//Then we have three hash tables, and when locking a node we lock lockTables[d%3]
+//This ensures that the up to three locks we hold at a time in a thread do not cause deadlock
+//Do not know if there are any other applications of this, but just making the constant 3 configurable. And anyways made it power of two to make the mod operation more efficient, since 3 is really a minimum
+class StripedLockTable {
+    private:
+        std::vector<SimpleLockHashTable> lockTables;
+    
+    public:
+        StripedLockTable(size_t numThreads, size_t numLocksPerThread = 3);
+        HashMutex getMutex(size_t id, size_t stripeId);
 
 };
 

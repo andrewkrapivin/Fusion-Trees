@@ -32,14 +32,18 @@ struct BTState {
 
     NT* cur;
     NT* par;
+    HashMutex curMtx;
+    HashMutex parMtx;
     size_t numThreads;
     size_t threadId;
-    LockHashTable* lockTable;
+    // LockHashTable* lockTable;
+    StripedLockTable* lockTable;
+    uint64_t depth;
     ThreadedIdGenerator* idGen;
     ofstream* debug;
     // template<bool HP> NT (*extra_splitting)(NT*, NT*, NT*);
     BTState(NT* root, size_t numThreads, size_t threadId);
-    BTState(NT* root, size_t numThreads, size_t threadId, LockHashTable* lockTable, ThreadedIdGenerator* idGen, ofstream* debug = NULL);
+    BTState(NT* root, size_t numThreads, size_t threadId, StripedLockTable* lockTable, ThreadedIdGenerator* idGen, ofstream* debug = NULL, uint64_t depth = 0);
     // template<bool HP> bool try_upgrade_reverse_order(); //HP: has par
     // template<bool HP> void read_unlock_both();
     // template<bool HP> void write_unlock_both();
@@ -70,21 +74,23 @@ struct BTState {
 template<typename NT, bool useLock, bool useHashLock>
 BTState<NT, useLock, useHashLock>::BTState(NT* root, size_t numThreads, size_t threadId): cur(root), par(NULL), numThreads(numThreads), threadId(threadId) {
     // if constexpr (useLock)
-    //     read_lock(&cur->mtx, WAIT_FOR_LOCK, thread_id);
+    //     read_lock(&curMtx, WAIT_FOR_LOCK, thread_id);
     if constexpr (useLock)
-        cur->mtx.readLock(threadId);
+        curMtx.readLock(threadId);
 }
 
 template<typename NT, bool useLock, bool useHashLock>
-BTState<NT, useLock, useHashLock>::BTState(NT* root, size_t numThreads, size_t threadId, LockHashTable* lockTable, ThreadedIdGenerator* idGen, ofstream* debug): cur(root), par(NULL), numThreads(numThreads), threadId(threadId), lockTable{lockTable}, idGen{idGen}, debug{debug} {
+BTState<NT, useLock, useHashLock>::BTState(NT* root, size_t numThreads, size_t threadId, StripedLockTable* lockTable, ThreadedIdGenerator* idGen, ofstream* debug, uint64_t depth): cur(root), par(NULL), numThreads(numThreads), threadId(threadId), lockTable{lockTable}, depth{depth}, idGen{idGen}, debug{debug} {
     // if constexpr (useLock)
-    //     read_lock(&cur->mtx, WAIT_FOR_LOCK, thread_id);
+    //     read_lock(&curMtx, WAIT_FOR_LOCK, thread_id);
     if constexpr (useLock) {
+        // curMtx = HashMutex(lockTable, (size_t) cur);
+        curMtx = lockTable->getMutex((size_t) cur, depth);
         if(debug) {
             if constexpr (useHashLock)
-                *debug << "Read locking " << cur->mtx.getId() << endl;
+                *debug << "Read locking " << curMtx.getId() << endl;
         }
-        cur->mtx.readLock(threadId);
+        curMtx.readLock(threadId);
         if(debug) {
             if constexpr (useHashLock)
                 *debug << "Finished read lock" << endl;
@@ -96,28 +102,28 @@ template<typename NT, bool useLock, bool useHashLock>
 // template<bool HP>
 bool BTState<NT, useLock, useHashLock>::try_upgrade_reverse_order() {
     if constexpr (useLock) {
-        // if(!partial_upgrade(&cur->mtx, TRY_ONCE_LOCK, thread_id)) {
+        // if(!partial_upgrade(&curMtx, TRY_ONCE_LOCK, thread_id)) {
         //     // if(HP)
         //     if(par != NULL)
-        //         read_unlock(&par->mtx, thread_id);
+        //         read_unlock(&parMtx, thread_id);
         //     return false;
         // }
         // if (par == NULL) {
-        //     finish_partial_upgrade(&cur->mtx);
+        //     finish_partial_upgrade(&curMtx);
         //     return true;
         // }
-        // if(!partial_upgrade(&par->mtx, TRY_ONCE_LOCK, thread_id)) {
-        //     unlock_partial_upgrade(&cur->mtx);
+        // if(!partial_upgrade(&parMtx, TRY_ONCE_LOCK, thread_id)) {
+        //     unlock_partial_upgrade(&curMtx);
         //     return false;
         // }
-        // finish_partial_upgrade(&par->mtx);
-        // finish_partial_upgrade(&cur->mtx);
+        // finish_partial_upgrade(&parMtx);
+        // finish_partial_upgrade(&curMtx);
         // return true;
         if(debug) {
             if constexpr (useHashLock)
-                *debug << "Trying partial upgrade of " << cur->mtx.getId() << endl;
+                *debug << "Trying partial upgrade of " << curMtx.getId() << endl;
         }
-        if(!cur->mtx.tryPartialUpgrade(threadId)) {
+        if(!curMtx.tryPartialUpgrade(threadId)) {
             if(debug) {
                 if constexpr (useHashLock)
                     *debug << "Failed" << endl;
@@ -125,9 +131,9 @@ bool BTState<NT, useLock, useHashLock>::try_upgrade_reverse_order() {
             if(par != NULL) {
                 if(debug) {
                     if constexpr (useHashLock)
-                        *debug << "Read unlocking " << par->mtx.getId() << endl;
+                        *debug << "Read unlocking " << parMtx.getId() << endl;
                 }
-                par->mtx.readUnlock(threadId);
+                parMtx.readUnlock(threadId);
                 if(debug) {
                     if constexpr (useHashLock)
                         *debug << "Finished" << endl;
@@ -142,9 +148,9 @@ bool BTState<NT, useLock, useHashLock>::try_upgrade_reverse_order() {
         if (par == NULL) {
             if(debug) {
                 if constexpr (useHashLock)
-                    *debug << "Finishing partial upgrade of " << cur->mtx.getId() << endl;
+                    *debug << "Finishing partial upgrade of " << curMtx.getId() << endl;
             }
-            cur->mtx.finishPartialUpgrade();
+            curMtx.finishPartialUpgrade();
             if(debug) {
                 if constexpr (useHashLock)
                     *debug << "Finished" << endl;
@@ -153,29 +159,29 @@ bool BTState<NT, useLock, useHashLock>::try_upgrade_reverse_order() {
         }
         if(debug) {
             if constexpr (useHashLock)
-                *debug << "Trying partial upgrade of " << par->mtx.getId() << endl;
+                *debug << "Trying partial upgrade of " << parMtx.getId() << endl;
         }
-        if(!par->mtx.tryPartialUpgrade(threadId)) {
+        if(!parMtx.tryPartialUpgrade(threadId)) {
             if(debug) {
                 if constexpr (useHashLock)
                     *debug << "Failed" << endl;
             }
-            cur->mtx.partialUpgradeUnlock();
+            curMtx.partialUpgradeUnlock();
             if(debug) {
                 if constexpr (useHashLock)
-                    (*debug) << "Finished partial upgrade unlock of " << cur->mtx.getId() << endl;
+                    (*debug) << "Finished partial upgrade unlock of " << curMtx.getId() << endl;
             }
             return false;
         }
-        par->mtx.finishPartialUpgrade();
+        parMtx.finishPartialUpgrade();
         if(debug) {
             if constexpr (useHashLock)
-                (*debug) << "Finished partial upgrade unlock of " << par->mtx.getId() << endl;
+                (*debug) << "Finished partial upgrade unlock of " << parMtx.getId() << endl;
         }
-        cur->mtx.finishPartialUpgrade();
+        curMtx.finishPartialUpgrade();
         if(debug) {
             if constexpr (useHashLock)
-                (*debug) << "Finished partial upgrade unlock of " << cur->mtx.getId() << endl;
+                (*debug) << "Finished partial upgrade unlock of " << curMtx.getId() << endl;
         }
         return true;
     }
@@ -186,10 +192,10 @@ template<typename NT, bool useLock, bool useHashLock>
 // template<bool HP>
 void BTState<NT, useLock, useHashLock>::read_unlock_both() {
     if constexpr (useLock) {
-        // read_unlock(&cur->mtx, thread_id);
-        // if(par != NULL) read_unlock(&par->mtx, thread_id);
-        cur->mtx.readUnlock(threadId);
-        if(par != NULL) par->mtx.readUnlock(threadId);
+        // read_unlock(&curMtx, thread_id);
+        // if(par != NULL) read_unlock(&parMtx, thread_id);
+        curMtx.readUnlock(threadId);
+        if(par != NULL) parMtx.readUnlock(threadId);
     }
 }
 
@@ -197,10 +203,10 @@ template<typename NT, bool useLock, bool useHashLock>
 // template<bool HP>
 void BTState<NT, useLock, useHashLock>::write_unlock_both() {
     if constexpr (useLock) {
-        // write_unlock(&cur->mtx);
-        cur->mtx.writeUnlock();
-        // if(par != NULL) write_unlock(&par->mtx);
-        if(par != NULL) par->mtx.writeUnlock();
+        // write_unlock(&curMtx);
+        curMtx.writeUnlock();
+        // if(par != NULL) write_unlock(&parMtx);
+        if(par != NULL) parMtx.writeUnlock();
     }
 }
 
@@ -208,7 +214,8 @@ template<typename NT, bool useLock, bool useHashLock>
 NT* BTState<NT, useLock, useHashLock>::initNode() {
     if constexpr (useLock) {
         if constexpr (useHashLock) {
-            return new NT{lockTable, (*idGen)(threadId)};
+            // return new NT{lockTable, (*idGen)(threadId)};
+            return new NT();
         }
         else {
             return new NT{numThreads};
@@ -287,22 +294,22 @@ bool BTState<NT, useLock, useHashLock>::split_if_needed(void ETS(NT*, NT*, NT*, 
         if(!split_node(ETS)) { //Return statement is just equal to par != NULL so maybe don't bother with this return statement? Can simplfiy ex next couple lines?
             // std::cout << "FDFSD2" << std::endl;
             // if constexpr (useLock) 
-            //     write_unlock(&cur->mtx);
+            //     write_unlock(&curMtx);
             if constexpr (useLock) 
-                cur->mtx.writeUnlock();
+                curMtx.writeUnlock();
             // std::cout << "FDFSD3" << std::endl;
         }
         else {
             // std::cout << "WHAT" << std::endl;
             if constexpr (useLock) 
-                cur->mtx.writeUnlock();
+                curMtx.writeUnlock();
             delete cur;
         }
         if constexpr (useLock) {
             // if(par != NULL)
-            //     write_unlock(&par->mtx);
+            //     write_unlock(&parMtx);
             if(par != NULL)
-                par->mtx.writeUnlock();
+                parMtx.writeUnlock();
         }
         return true;
     }
@@ -330,13 +337,18 @@ bool BTState<NT, useLock, useHashLock>::try_HOH_readlock(NT* child) {
         //     return false;
         // }
         // if(par != NULL)
-        //     read_unlock(&par->mtx, thread_id);
-        if(!child->mtx.tryReadLock(threadId)) {
+        //     read_unlock(&parMtx, thread_id);
+        depth++;
+        // HashMutex childMtx{lockTable, (size_t) child};
+        HashMutex childMtx = lockTable->getMutex((size_t) child, depth);
+        if(!childMtx.tryReadLock(threadId)) {
             read_unlock_both();
             return false;
         }
         if(par != NULL)
-            par->mtx.readUnlock(threadId);
+            parMtx.readUnlock(threadId);
+        parMtx = curMtx;
+        curMtx = childMtx;
     }
     par = cur;
     cur = child;

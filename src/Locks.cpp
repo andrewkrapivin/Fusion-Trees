@@ -47,8 +47,8 @@ void ReadWriteMutex::getWriteLock() {
 }
 
 void ReadWriteMutex::waitForReadLocks() {
-    for(auto& rlunit: rlUnits) {
-        while(rlunit.lockId.load(std::memory_order_relaxed) != 0);
+    for(auto& rlUnit: rlUnits) {
+        while(rlUnit.lockId.load(std::memory_order_relaxed) != 0);
     }
 }
 
@@ -130,7 +130,14 @@ void ReadWriteMutex::partialUpgradeUnlock() {
 
 void ReadWriteMutex::readUnlock(size_t threadId) {
     // std::cout << "HELLO3 " << threadId << std::endl;
-    rlUnits[threadId].lockId.store(0, std::memory_order_relaxed); //I think relaxed is fine here? Should test this on a system without strong memory ordering so not x86
+    // rlUnits[threadId].lockId.store(0, std::memory_order_relaxed); //I think relaxed is fine here? Should test this on a system without strong memory ordering so not x86
+    // Might actually not be ok since do we want to allow reordering of loads after this store!! Maybe we need acquire barrier here. Although that applies to all the locks in general?? Or rather we actually need a release barrier here.
+    // Possible problem:
+    // Imagine that we want to use a data structure protected by a lock. We then just want to save some info from the data structure.
+    // Then the loads for some of the info are reordered after and some before, so some info is old and some is new, which might just completely break teh data structure.
+    // But also this then actually should be a release barrier since this "saving" of data is a store to new mem location, and that is the only problem we are concerned with. So no other locks not broken, just this one technically was (although I do not think it would be broken for fusion trees since I do not do this saving of data that I do not then have some other lock solve the problem for me with?)
+    rlUnits[threadId].lockId.store(0, std::memory_order_release);
+    //This feels unnecessary since there is a (currently? implicit) contract that if you have a readlock you cannot store to the protected data, so you don't need to worry about ordering stores before, but by the argument above we need it.
 }
 
 // void HashReadLock::readlock(int thread, uint64_t id, std::array<HashWriteLock&,2> possibleWriteLocks) {

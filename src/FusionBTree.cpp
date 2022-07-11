@@ -91,7 +91,13 @@ __m512i* parallel_predecessor_DLock(BTState<NodeName, useLock, useHashLock> stat
 
 
 
-ParallelFusionBNode::ParallelFusionBNode(LockHashTable* table, size_t id): fusion_internal_tree(), mtx{table, id} {
+// ParallelFusionBNode::ParallelFusionBNode(LockHashTable* table, size_t id): fusion_internal_tree(), mtx{table, id} {
+//     for(int i=0; i<MAX_FUSION_SIZE+1; i++) {
+//         children[i] = NULL;
+//     }
+//     // rw_lock_init(&mtx);
+// }
+ParallelFusionBNode::ParallelFusionBNode(): fusion_internal_tree() {
     for(int i=0; i<MAX_FUSION_SIZE+1; i++) {
         children[i] = NULL;
     }
@@ -103,7 +109,7 @@ ParallelFusionBNode::ParallelFusionBNode(LockHashTable* table, size_t id): fusio
 // }
 
 //probably need to figure out smth better than just hardcoding the 3 locks that a fusion tree thread can hold at a time (for hand over hand locking)
-ParallelFusionBTree::ParallelFusionBTree(size_t numThreads): numThreads{numThreads}, lockTable{numThreads, 3}, idGen{numThreads}, root{&lockTable, idGen(0)} {
+ParallelFusionBTree::ParallelFusionBTree(size_t numThreads): numThreads{numThreads}, lockTable{numThreads, 3}, idGen{numThreads}, root{} {
     for(size_t i{0}; i < numThreads; i++) {
         debugFiles.push_back(ofstream{string("debugLocks")+to_string(i)+string(".txt")});
     }
