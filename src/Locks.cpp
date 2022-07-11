@@ -119,7 +119,7 @@ void ReadWriteMutex::partialUpgradeUnlock() {
 
 void ReadWriteMutex::readUnlock(size_t threadId) {
     // std::cout << "HELLO3 " << threadId << std::endl;
-    rlUnits[threadId].lockId.store(0, std::memory_order_relaxed); //I think relaxed is fine here? Should test this on a system without strong memory ordering so not x86
+    rlUnits[threadId].lockId.store(0, std::memory_order_release); //I think relaxed is fine here? Should test this on a system without strong memory ordering so not x86
 }
 
 // void HashReadLock::readlock(int thread, uint64_t id, std::array<HashWriteLock&,2> possibleWriteLocks) {
