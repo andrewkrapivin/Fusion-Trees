@@ -109,7 +109,7 @@ ParallelFusionBNode::ParallelFusionBNode(): fusion_internal_tree() {
 // }
 
 //probably need to figure out smth better than just hardcoding the 3 locks that a fusion tree thread can hold at a time (for hand over hand locking)
-ParallelFusionBTree::ParallelFusionBTree(size_t numThreads): numThreads{numThreads}, lockTable{numThreads, 3}, idGen{numThreads}, root{} {
+ParallelFusionBTree::ParallelFusionBTree(size_t numThreads): numThreads{numThreads}, lockTable{numThreads}, idGen{numThreads}, root{} {
     for(size_t i{0}; i < numThreads; i++) {
         debugFiles.push_back(ofstream{string("debugLocks")+to_string(i)+string(".txt")});
     }

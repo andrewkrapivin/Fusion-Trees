@@ -96,8 +96,9 @@ class SimpleLockHashTable {
         size_t numThreads;
         size_t numBits;
         std::vector<LockUnit> writeLocks;
-        std::vector<LockUnit> readLocks; //lol don't just have one readlock per thread cause then writelocking becomes super expensive!!!
-        SimpleHashFunction hashFunc;
+        std::vector<LockUnit> readLocks;
+        // SimpleHashFunction hashFunc;
+        BasicHashFunction hashFunc;
         void getWriteLock(size_t id);
         TryLockPossibilities tryGetWriteLock(size_t id);
         void waitForReadLocks(size_t id);
@@ -235,7 +236,7 @@ class StripedLockTable {
         std::vector<SimpleLockHashTable> lockTables;
     
     public:
-        StripedLockTable(size_t numThreads, size_t numLocksPerThread = 3);
+        StripedLockTable(size_t numThreads, size_t numLocksPerThread = 8);
         HashMutex getMutex(size_t id, size_t stripeId);
 
 };

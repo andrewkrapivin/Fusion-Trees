@@ -39,6 +39,7 @@ uint64_t BasicHashFunction::getBits(uint64_t id) {
         shift+=8;
     }
     res &= (1ull << numBits) - 1;
+    // std::cout << res << std::endl;
     return res;
 }
 
@@ -61,7 +62,7 @@ uint64_t SimpleHashFunction::getBits(uint64_t id) {
     id >>= 6; //using alligned memory so we can assume pointers are a multiple of 64.
     uint64_t lowerBits = id & ((1ull << 32) - 1);
     uint64_t higherBits = id >> 32;
-    uint64_t hash = lowerBits * a + higherBits*b;
+    uint64_t hash = (lowerBits * a) ^ (higherBits*b);
     hash = hash & ((1ull << numBits) - 1);
     // std::cout << id << " lowerBits " << lowerBits << " higherBits: " << higherBits << ", a: " << a << ", b: " << b << std::endl;
     // std::cout << hash << std::endl;
@@ -151,9 +152,9 @@ void SimpleLockHashTable::readLock(size_t id, size_t threadId) {
     LockUnit& rlUnit = readLocks[threadId];
 
     rlUnit.lockId.store(id, std::memory_order_release);
-    while(wlUnit.lockId.load(std::memory_order_acquire) != 0) {
+    while(wlUnit.lockId.load(std::memory_order_acquire) == id) {
         rlUnit.lockId.store(0, std::memory_order_relaxed);
-        while(wlUnit.lockId.load(std::memory_order_relaxed) != 0);
+        while(wlUnit.lockId.load(std::memory_order_relaxed) == id);
         rlUnit.lockId.store(id, std::memory_order_release);
     }
 }
@@ -165,11 +166,12 @@ TryLockPossibilities SimpleLockHashTable::tryReadLock(size_t id, size_t threadId
 
     rlUnit.lockId.store(id, std::memory_order_release);
     uint64_t cId = wlUnit.lockId.load(std::memory_order_acquire);
-    if(cId != 0) {
+    if(cId == id) {
         rlUnit.lockId.store(0, std::memory_order_release);
-        if(cId == id)
-            return TryLockPossibilities::WriteLocked;
-        return TryLockPossibilities::LocksBusy;
+        // if(cId == id)
+        //     return TryLockPossibilities::WriteLocked;
+        // return TryLockPossibilities::LocksBusy;
+        return TryLockPossibilities::WriteLocked;
     }
 
     return TryLockPossibilities::Success;
@@ -931,6 +933,7 @@ StripedLockTable::StripedLockTable(size_t numThreads, size_t numLocksPerThread) 
 }
 
 HashMutex StripedLockTable::getMutex(size_t id, size_t stripeId) {
+    // std::cout << stripeId << std::endl;
     stripeId = stripeId & (lockTables.size()-1);
     return HashMutex(&lockTables[stripeId], id);
 }
