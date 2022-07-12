@@ -10,7 +10,7 @@
 #include <ostream>
 #include <immintrin.h>
 #include "HashLocks.hpp"
-#include "ThreadedIdGenerator.hpp"
+// #include "ThreadedIdGenerator.hpp"
 
 //maybe do like numbranches macro defined as max_fusion_size+1 to make things a bit nicer?
 
@@ -68,7 +68,7 @@ class ParallelFusionBTree {
     private:
         size_t numThreads;
         StripedLockTable lockTable;
-        ThreadedIdGenerator idGen;
+        // ThreadedIdGenerator idGen;
         ParallelFusionBNode root;
         vector<ofstream> debugFiles;
         // size_t thread_id;

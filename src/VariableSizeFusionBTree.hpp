@@ -21,14 +21,14 @@ struct vsize_parallel_fusion_b_node {
     fusion_node fusion_internal_tree;
 	vsize_parallel_fusion_b_node* children[MAX_FUSION_SIZE+1];
     // ReaderWriterLock mtx;
-    ReadWriteMutex mtx;
+    // ReadWriteMutex mtx;
     VT vals[MAX_FUSION_SIZE];
     vsize_parallel_fusion_b_node* subtree_roots[MAX_FUSION_SIZE];
     //Not sure how to do the skip_nodes stuff. Maybe just do that with the hash tables? Or actually wait is there even any reason for that
     // int id; //temp debug
 
-    vsize_parallel_fusion_b_node(size_t numThreads);
-    ~vsize_parallel_fusion_b_node();
+    vsize_parallel_fusion_b_node();
+    // ~vsize_parallel_fusion_b_node();
     void deleteSubtrees();
     void ins_val(VT val, int pos);
     void ins_subtree(vsize_parallel_fusion_b_node<VT>* root, int pos);
@@ -49,6 +49,12 @@ struct vsize_parallel_fusion_b_node {
 //     VT* vals[MAX_FUSION_SIZE];
 // };
 
+struct alignas(64) m512iWrapper {
+    __m512i m;
+    m512iWrapper(__m512i m) : m(m) {}
+    
+};
+
 //Really badly coded rn. Def fix
 struct m512i_arr {
     static constexpr int default_size = 1;
@@ -68,17 +74,17 @@ struct m512i_arr {
 };
 
 template<typename VT>
-using VSP_BTState = BTState<vsize_parallel_fusion_b_node<VT>>;
+using VSP_BTState = BTState<vsize_parallel_fusion_b_node<VT>, true>;
 
 template<typename VT>
 class VariableSizeParallelFusionBTree {
     private:
         size_t numThreads;
         vsize_parallel_fusion_b_node<VT> root;
-        ThreadedIdGenerator idgen;
-        LockHashTable locks;
+        // ThreadedIdGenerator idgen;
+        StripedLockTable lockTable;
         void set_val_and_new_root(VSP_BTState<VT> state, m512i_arr key, VT val, int branch, size_t thread_id);
-        void insert(vsize_parallel_fusion_b_node<VT>* root, m512i_arr key, VT val, size_t threadId);
+        void insert(vsize_parallel_fusion_b_node<VT>* subroot, m512i_arr key, VT val, size_t threadId);
         std::pair<VT, bool> new_root_pquery(VSP_BTState<VT> state, m512i_arr key, int branch, size_t threadId);
         std::pair<VT, bool> pquery(m512i_arr key, vsize_parallel_fusion_b_node<VT>* subroot, size_t threadId);
 
@@ -136,7 +142,7 @@ uint16_t shift_part_left(uint16_t mask, int pos) {
 }
 
 template<typename VT>
-vsize_parallel_fusion_b_node<VT>::vsize_parallel_fusion_b_node(size_t numThreads): fusion_internal_tree(), mtx{numThreads} {
+vsize_parallel_fusion_b_node<VT>::vsize_parallel_fusion_b_node(): fusion_internal_tree() {
     for(int i=0; i<MAX_FUSION_SIZE+1; i++) {
         children[i] = NULL;
     }
@@ -150,11 +156,14 @@ vsize_parallel_fusion_b_node<VT>::vsize_parallel_fusion_b_node(size_t numThreads
     // id = idc++;
 }
 
-template<typename VT>
-vsize_parallel_fusion_b_node<VT>::~vsize_parallel_fusion_b_node() {
-    // pc_destructor(&mtx.pc_counter);
-}
+// template<typename VT>
+// vsize_parallel_fusion_b_node<VT>::~vsize_parallel_fusion_b_node() {
+//     // pc_destructor(&mtx.pc_counter);
+// }
 
+
+//Idea: make this actually use locks rather than implicitly requiring that all other threads have finished operating on this subtree.
+//Should be rather easy to implement(just write lock in the beginning and unlock at the end).
 template<typename VT>
 void vsize_parallel_fusion_b_node<VT>::deleteSubtrees() {
     for(size_t i{0}; i < MAX_FUSION_SIZE+1; i++) {
@@ -319,7 +328,7 @@ void extra_splitting(vsize_parallel_fusion_b_node<VT>* par, vsize_parallel_fusio
 
 
 template<typename VT>
-VariableSizeParallelFusionBTree<VT>::VariableSizeParallelFusionBTree(size_t numThreads): numThreads{numThreads}, root{numThreads}, idgen{numThreads}, locks{numThreads, 10} {
+VariableSizeParallelFusionBTree<VT>::VariableSizeParallelFusionBTree(size_t numThreads): numThreads{numThreads}, root{}, lockTable{numThreads} {
 }
 
 template<typename VT>
@@ -341,7 +350,7 @@ void VariableSizeParallelFusionBTree<VT>::set_val_and_new_root(VSP_BTState<VT> s
     else {
         if(state.cur->subtree_roots[branch] == NULL) {
             // cout << "Made new subtree root" << endl;
-            state.cur->subtree_roots[branch] = new vsize_parallel_fusion_b_node<VT>(numThreads);
+            state.cur->subtree_roots[branch] = new vsize_parallel_fusion_b_node<VT>();
         }
         vsize_parallel_fusion_b_node<VT>* new_root = state.cur->subtree_roots[branch];
         state.write_unlock_both();
@@ -351,36 +360,43 @@ void VariableSizeParallelFusionBTree<VT>::set_val_and_new_root(VSP_BTState<VT> s
 
 //keep track of how many times we "restart" in the tree?
 template<typename VT>
-void VariableSizeParallelFusionBTree<VT>::insert(vsize_parallel_fusion_b_node<VT>* root, m512i_arr key, VT val, size_t thread_id) {
+void VariableSizeParallelFusionBTree<VT>::insert(vsize_parallel_fusion_b_node<VT>* subroot, m512i_arr key, VT val, size_t thread_id) {
     // cout << "Called with " << key.offset << " " << key.size << ", root id: " << root->id << endl;
-    VSP_BTState<VT> state(root, numThreads, thread_id);
-
     __m512i* curkey = key.get_at_offset();
-    // print_vec(*curkey, true);
-    // print_vec(root->fusion_internal_tree.keys[0], true);
 
-    while(true) {
-        if(state.split_if_needed(extra_splitting<VT>)) {
-            return insert(root, key, val, thread_id);
-        }
-        int branch = query_branch_node(&state.cur->fusion_internal_tree, *curkey);
-        if(branch < 0) { 
-            branch = ~branch;
-            if(state.try_upgrade_reverse_order())
-                return set_val_and_new_root(state, key, val, branch, thread_id);
-            return insert(root, key, val, thread_id);
-        }
-        if(state.cur->children[branch] == NULL) {
-            if(state.try_insert_key(*curkey, false)) {
-                int branch = ~query_branch_node(&state.cur->fusion_internal_tree, *curkey);
-                // print_vec(state.cur->fusion_internal_tree.keys[0], true);
-                state.cur->finish_key_insert(branch);
-                return set_val_and_new_root(state, key, val, branch, thread_id);
+    while (true) {
+        VSP_BTState<VT> state(subroot, numThreads, thread_id, &lockTable); //Maybe set depth to something nicer?
+        state.start();
+        // print_vec(*curkey, true);
+        // print_vec(root->fusion_internal_tree.keys[0], true);
+
+        while(true) {
+            if(state.split_if_needed(extra_splitting<VT>)) {
+                // return insert(root, key, val, thread_id);
+                break;
             }
-            return insert(root, key, val, thread_id);
-        }
-        if(!state.try_HOH_readlock(state.cur->children[branch])) {
-            return insert(root, key, val, thread_id);
+            int branch = query_branch_node(&state.cur->fusion_internal_tree, *curkey);
+            if(branch < 0) { 
+                branch = ~branch;
+                if(state.try_upgrade_reverse_order())
+                    return set_val_and_new_root(state, key, val, branch, thread_id);
+                // return insert(root, key, val, thread_id);
+                break;
+            }
+            if(state.cur->children[branch] == NULL) {
+                if(state.try_insert_key(*curkey, false)) {
+                    int branch = ~query_branch_node(&state.cur->fusion_internal_tree, *curkey);
+                    // print_vec(state.cur->fusion_internal_tree.keys[0], true);
+                    state.cur->finish_key_insert(branch);
+                    return set_val_and_new_root(state, key, val, branch, thread_id);
+                }
+                // return insert(root, key, val, thread_id);
+                break;
+            }
+            if(!state.try_HOH_readlock(state.cur->children[branch])) {
+                // return insert(root, key, val, thread_id);
+                break;
+            }
         }
     }
 }
@@ -424,26 +440,30 @@ std::pair<VT, bool> VariableSizeParallelFusionBTree<VT>::new_root_pquery(VSP_BTS
 template<typename VT>
 std::pair<VT, bool> VariableSizeParallelFusionBTree<VT>::pquery(m512i_arr key, vsize_parallel_fusion_b_node<VT>* subroot, size_t threadId) {
     // cout << "Called with " << key.offset << " " << key.size << ", root id: " << subroot->id << endl;
-    VSP_BTState<VT> state(subroot, numThreads, threadId); //This was root before and taking the element in the class causing problems. Like be consistent with naming or figure out another way to not have this particular problem
-
     __m512i* curkey = key.get_at_offset();
-    // print_vec(*curkey, true);
 
     while(true) {
-        int branch = query_branch_node(&state.cur->fusion_internal_tree, *curkey);
-        if(branch < 0) { 
-            branch = ~branch;
-            return new_root_pquery(state, key, branch, threadId);
-        }
-        if(state.cur->children[branch] == NULL) { //haven't found an exact match for our portion of the key in the tree, so we know that the query is false
-            // cout << "WTF" << endl;
-            // print_vec(state.cur->fusion_internal_tree.keys[0], true);
-            // cout << "Full key: " << state.cur->fusion_internal_tree.tree.meta.fullkey << endl;
-            state.read_unlock_both();
-            return std::make_pair(0, false);
-        }
-        if(!state.try_HOH_readlock(state.cur->children[branch])) {
-            return pquery(key, subroot, threadId);
+        VSP_BTState<VT> state(subroot, numThreads, threadId, &lockTable); //This was root before and taking the element in the class causing problems. Like be consistent with naming or figure out another way to not have this particular problem
+        state.start();
+        // print_vec(*curkey, true);
+
+        while(true) {
+            int branch = query_branch_node(&state.cur->fusion_internal_tree, *curkey);
+            if(branch < 0) { 
+                branch = ~branch;
+                return new_root_pquery(state, key, branch, threadId);
+            }
+            if(state.cur->children[branch] == NULL) { //haven't found an exact match for our portion of the key in the tree, so we know that the query is false
+                // cout << "WTF" << endl;
+                // print_vec(state.cur->fusion_internal_tree.keys[0], true);
+                // cout << "Full key: " << state.cur->fusion_internal_tree.tree.meta.fullkey << endl;
+                state.read_unlock_both();
+                return std::make_pair(0, false);
+            }
+            if(!state.try_HOH_readlock(state.cur->children[branch])) {
+                // return pquery(key, subroot, threadId);
+                break;
+            }
         }
     }
 }

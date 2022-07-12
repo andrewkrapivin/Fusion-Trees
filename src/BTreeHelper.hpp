@@ -13,7 +13,7 @@
 //TODO: generalize this template for any kind of B-tree so that could do some comparative testing.
 using namespace std;
 
-template<typename NT, bool useLock = true, bool useHashLock = false> //NT--node type.
+template<typename NT, bool useLock = true> //NT--node type.
 //NT MUST have fusion_internal_tree, children, mtx somewhere in it. I don't know how to restrict it so that that is the case, but just this is a thing. Basically, it must be related to parallel_fusion_b_node, but it can also be the variable size one
 //Another thing that must be guaranteed, and this is definitely sus, is that we have the fusion node then the children arrayed next to each other in memory for clearing.
 //Honestly maybe figure out a better system for this
@@ -39,11 +39,11 @@ struct BTState {
     // LockHashTable* lockTable;
     StripedLockTable* lockTable;
     uint64_t depth;
-    ThreadedIdGenerator* idGen;
+    // ThreadedIdGenerator* idGen;
     ofstream* debug;
     // template<bool HP> NT (*extra_splitting)(NT*, NT*, NT*);
     BTState(NT* root, size_t numThreads, size_t threadId);
-    BTState(NT* root, size_t numThreads, size_t threadId, StripedLockTable* lockTable, ThreadedIdGenerator* idGen, ofstream* debug = NULL, uint64_t depth = 0);
+    BTState(NT* root, size_t numThreads, size_t threadId, StripedLockTable* lockTable, ofstream* debug = NULL, uint64_t depth = 0);
     // template<bool HP> bool try_upgrade_reverse_order(); //HP: has par
     // template<bool HP> void read_unlock_both();
     // template<bool HP> void write_unlock_both();
@@ -51,6 +51,7 @@ struct BTState {
     // template<bool HP, void (*ETS)(NT*, NT*, NT*) = emptyfunc> bool split_if_needed(); //returns true if needed to split, false if did not
     // template<bool HP> void try_insert_key(__m512i key);
     // template<bool HP> bool try_HOH_readlock(NT* child); //unlocks everything on failure
+    void start(); //Read locks the root to start traversing. Maybe should call this startReadlock or smth to specify that?
     bool try_upgrade_reverse_order(); //Honestly probably better (maybe a tiny bit less efficient but w/ modern compilers who knows?) to not bother with the templating. Makes much nicer code
     void read_unlock_both();
     void write_unlock_both();
@@ -71,176 +72,75 @@ struct BTState {
 
 
 
-template<typename NT, bool useLock, bool useHashLock>
-BTState<NT, useLock, useHashLock>::BTState(NT* root, size_t numThreads, size_t threadId): cur(root), par(NULL), numThreads(numThreads), threadId(threadId) {
-    // if constexpr (useLock)
-    //     read_lock(&curMtx, WAIT_FOR_LOCK, thread_id);
-    if constexpr (useLock)
-        curMtx.readLock(threadId);
+template<typename NT, bool useLock>
+BTState<NT, useLock>::BTState(NT* root, size_t numThreads, size_t threadId): cur(root), par(NULL), numThreads(numThreads), threadId(threadId) {
+    static_assert(!useLock);
 }
 
-template<typename NT, bool useLock, bool useHashLock>
-BTState<NT, useLock, useHashLock>::BTState(NT* root, size_t numThreads, size_t threadId, StripedLockTable* lockTable, ThreadedIdGenerator* idGen, ofstream* debug, uint64_t depth): cur(root), par(NULL), numThreads(numThreads), threadId(threadId), lockTable{lockTable}, depth{depth}, idGen{idGen}, debug{debug} {
-    // if constexpr (useLock)
-    //     read_lock(&curMtx, WAIT_FOR_LOCK, thread_id);
+template<typename NT, bool useLock>
+BTState<NT, useLock>::BTState(NT* root, size_t numThreads, size_t threadId, StripedLockTable* lockTable, ofstream* debug, uint64_t depth): cur(root), par(NULL), numThreads(numThreads), threadId(threadId), lockTable{lockTable}, depth{depth}, debug{debug} {
+    static_assert(useLock);
+    curMtx = lockTable->getMutex((size_t) cur, depth);
+}
+
+template<typename NT, bool useLock>
+void BTState<NT, useLock>::start() {
     if constexpr (useLock) {
-        // curMtx = HashMutex(lockTable, (size_t) cur);
-        curMtx = lockTable->getMutex((size_t) cur, depth);
-        if(debug) {
-            if constexpr (useHashLock)
-                *debug << "Read locking " << curMtx.getId() << endl;
-        }
         curMtx.readLock(threadId);
-        if(debug) {
-            if constexpr (useHashLock)
-                *debug << "Finished read lock" << endl;
-        }
     }
 }
 
-template<typename NT, bool useLock, bool useHashLock>
-// template<bool HP>
-bool BTState<NT, useLock, useHashLock>::try_upgrade_reverse_order() {
+template<typename NT, bool useLock>
+bool BTState<NT, useLock>::try_upgrade_reverse_order() {
     if constexpr (useLock) {
-        // if(!partial_upgrade(&curMtx, TRY_ONCE_LOCK, thread_id)) {
-        //     // if(HP)
-        //     if(par != NULL)
-        //         read_unlock(&parMtx, thread_id);
-        //     return false;
-        // }
-        // if (par == NULL) {
-        //     finish_partial_upgrade(&curMtx);
-        //     return true;
-        // }
-        // if(!partial_upgrade(&parMtx, TRY_ONCE_LOCK, thread_id)) {
-        //     unlock_partial_upgrade(&curMtx);
-        //     return false;
-        // }
-        // finish_partial_upgrade(&parMtx);
-        // finish_partial_upgrade(&curMtx);
-        // return true;
-        if(debug) {
-            if constexpr (useHashLock)
-                *debug << "Trying partial upgrade of " << curMtx.getId() << endl;
-        }
         if(!curMtx.tryPartialUpgrade(threadId)) {
-            if(debug) {
-                if constexpr (useHashLock)
-                    *debug << "Failed" << endl;
-            }
             if(par != NULL) {
-                if(debug) {
-                    if constexpr (useHashLock)
-                        *debug << "Read unlocking " << parMtx.getId() << endl;
-                }
                 parMtx.readUnlock(threadId);
-                if(debug) {
-                    if constexpr (useHashLock)
-                        *debug << "Finished" << endl;
-                }
             }
             return false;
         }
-        if(debug) {
-            if constexpr (useHashLock)
-                *debug << "Succeeded" << endl;
-        }
         if (par == NULL) {
-            if(debug) {
-                if constexpr (useHashLock)
-                    *debug << "Finishing partial upgrade of " << curMtx.getId() << endl;
-            }
             curMtx.finishPartialUpgrade();
-            if(debug) {
-                if constexpr (useHashLock)
-                    *debug << "Finished" << endl;
-            }
             return true;
         }
-        if(debug) {
-            if constexpr (useHashLock)
-                *debug << "Trying partial upgrade of " << parMtx.getId() << endl;
-        }
         if(!parMtx.tryPartialUpgrade(threadId)) {
-            if(debug) {
-                if constexpr (useHashLock)
-                    *debug << "Failed" << endl;
-            }
             curMtx.partialUpgradeUnlock();
-            if(debug) {
-                if constexpr (useHashLock)
-                    (*debug) << "Finished partial upgrade unlock of " << curMtx.getId() << endl;
-            }
             return false;
         }
         parMtx.finishPartialUpgrade();
-        if(debug) {
-            if constexpr (useHashLock)
-                (*debug) << "Finished partial upgrade unlock of " << parMtx.getId() << endl;
-        }
         curMtx.finishPartialUpgrade();
-        if(debug) {
-            if constexpr (useHashLock)
-                (*debug) << "Finished partial upgrade unlock of " << curMtx.getId() << endl;
-        }
         return true;
     }
     return true;
 }
 
-template<typename NT, bool useLock, bool useHashLock>
-// template<bool HP>
-void BTState<NT, useLock, useHashLock>::read_unlock_both() {
+template<typename NT, bool useLock>
+void BTState<NT, useLock>::read_unlock_both() {
     if constexpr (useLock) {
-        // read_unlock(&curMtx, thread_id);
-        // if(par != NULL) read_unlock(&parMtx, thread_id);
         curMtx.readUnlock(threadId);
         if(par != NULL) parMtx.readUnlock(threadId);
     }
 }
 
-template<typename NT, bool useLock, bool useHashLock>
-// template<bool HP>
-void BTState<NT, useLock, useHashLock>::write_unlock_both() {
+template<typename NT, bool useLock>
+void BTState<NT, useLock>::write_unlock_both() {
     if constexpr (useLock) {
-        // write_unlock(&curMtx);
         curMtx.writeUnlock();
-        // if(par != NULL) write_unlock(&parMtx);
         if(par != NULL) parMtx.writeUnlock();
     }
 }
 
-template<typename NT, bool useLock, bool useHashLock>
-NT* BTState<NT, useLock, useHashLock>::initNode() {
-    if constexpr (useLock) {
-        if constexpr (useHashLock) {
-            // return new NT{lockTable, (*idGen)(threadId)};
-            return new NT();
-        }
-        else {
-            return new NT{numThreads};
-        }
-    }
-    else {
-        return new NT();
-    }
+//Function probably no longer needed. Remove?
+template<typename NT, bool useLock>
+NT* BTState<NT, useLock>::initNode() {
+    return new NT();
 }
 
-template<typename NT, bool useLock, bool useHashLock>
+template<typename NT, bool useLock>
 // template<void ETS(NT*, NT*, NT*, NT*, int, fusion_metadata)> //Why does this templated version not work??? It should...
-bool BTState<NT, useLock, useHashLock>::split_node(void ETS(NT*, NT*, NT*, NT*, int, fusion_metadata)) {
-    // fusion_node* key_fnode = &cur->fusion_internal_tree;
-
+bool BTState<NT, useLock>::split_node(void ETS(NT*, NT*, NT*, NT*, int, fusion_metadata)) {
     NT* newlefthalf = initNode();
     NT* newrighthalf = initNode();
-    // if constexpr (useLock) {
-    //     newlefthalf = new NT(numThreads);
-    //     newrighthalf = new NT(numThreads);
-    // }
-    // else {
-    //     newlefthalf = new NT();
-    //     newrighthalf = new NT();
-    // }
 
     constexpr int medpos = MAX_FUSION_SIZE/2; //two choices since max size even: maybe randomize?
     for(int i = 0; i < medpos; i++) {
@@ -283,31 +183,22 @@ bool BTState<NT, useLock, useHashLock>::split_node(void ETS(NT*, NT*, NT*, NT*, 
     return true;
 }
 
-template<typename NT, bool useLock, bool useHashLock>
-// template<void ETS(NT*, NT*, NT*, NT*, int, fusion_metadata)>
-bool BTState<NT, useLock, useHashLock>::split_if_needed(void ETS(NT*, NT*, NT*, NT*, int, fusion_metadata)) {
+template<typename NT, bool useLock>
+bool BTState<NT, useLock>::split_if_needed(void ETS(NT*, NT*, NT*, NT*, int, fusion_metadata)) {
     if(node_full(&cur->fusion_internal_tree)) {
         if(!try_upgrade_reverse_order()) { //Somewhat misleading but basically to tell you that you need to restart the inserting process
-            // std::cout << "FDFSD" << std::endl;
             return true;
         }
         if(!split_node(ETS)) { //Return statement is just equal to par != NULL so maybe don't bother with this return statement? Can simplfiy ex next couple lines?
-            // std::cout << "FDFSD2" << std::endl;
-            // if constexpr (useLock) 
-            //     write_unlock(&curMtx);
             if constexpr (useLock) 
                 curMtx.writeUnlock();
-            // std::cout << "FDFSD3" << std::endl;
         }
         else {
-            // std::cout << "WHAT" << std::endl;
             if constexpr (useLock) 
                 curMtx.writeUnlock();
             delete cur;
         }
         if constexpr (useLock) {
-            // if(par != NULL)
-            //     write_unlock(&parMtx);
             if(par != NULL)
                 parMtx.writeUnlock();
         }
@@ -316,9 +207,8 @@ bool BTState<NT, useLock, useHashLock>::split_if_needed(void ETS(NT*, NT*, NT*, 
     return false; //Tells you split was unnecessary
 }
 
-template<typename NT, bool useLock, bool useHashLock>
-// template<bool HP>
-bool BTState<NT, useLock, useHashLock>::try_insert_key(__m512i key, bool auto_unlock) {
+template<typename NT, bool useLock>
+bool BTState<NT, useLock>::try_insert_key(__m512i key, bool auto_unlock) {
     if(try_upgrade_reverse_order()) {
         insert_key_node(&cur->fusion_internal_tree, key);
         if (auto_unlock)
@@ -328,18 +218,10 @@ bool BTState<NT, useLock, useHashLock>::try_insert_key(__m512i key, bool auto_un
     return false;
 }
 
-template<typename NT, bool useLock, bool useHashLock>
-// template<bool HP>
-bool BTState<NT, useLock, useHashLock>::try_HOH_readlock(NT* child) {
+template<typename NT, bool useLock>
+bool BTState<NT, useLock>::try_HOH_readlock(NT* child) {
     if constexpr (useLock) {
-        // if(!read_lock(&child->mtx, TRY_ONCE_LOCK, thread_id)) {
-        //     read_unlock_both();
-        //     return false;
-        // }
-        // if(par != NULL)
-        //     read_unlock(&parMtx, thread_id);
         depth++;
-        // HashMutex childMtx{lockTable, (size_t) child};
         HashMutex childMtx = lockTable->getMutex((size_t) child, depth);
         if(!childMtx.tryReadLock(threadId)) {
             read_unlock_both();
