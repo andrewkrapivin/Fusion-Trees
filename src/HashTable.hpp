@@ -32,7 +32,7 @@
 //     SHashType predecessorSHashes[EntriesPerBucket][numEachSide];
 // };
 
-//Gonna assume that the size of VT is less than 16 bytes, which is probably not a good assumption to make. But we can make it bigger to a certain extent.
+//Gonna assume that the size of VT is small enough for everything other than the key to fit in one cache line, which is probably not a good assumption to make. But we can make it bigger to a certain extent.
 template<typename NT, typename VT>
 struct alignas(64) HashBucket {
     NT* child;
@@ -41,11 +41,11 @@ struct alignas(64) HashBucket {
     bool isVal;
 };
 
-template<typename NT>
+template<typename NT, typename VT>
 class HashTable {
     private:
         size_t size;
-        std::vector<HashBucket<NT>> table;
+        std::vector<HashBucket<NT, VT>> table;
     
     public:
 

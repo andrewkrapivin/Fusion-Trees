@@ -9,6 +9,7 @@
 #include "HelperFuncs.h"
 #include "ThreadedIdGenerator.hpp"
 #include "HashLocks.hpp"
+#include <vector>
 #include <cstring>
 #include <thread>
 #include <fstream>
@@ -49,33 +50,19 @@ struct vsize_parallel_fusion_b_node {
 //     VT* vals[MAX_FUSION_SIZE];
 // };
 
+//Here just because vector does not play well with __m512i. All it does is just do implicit conversion and specify alignment
 struct alignas(64) m512iWrapper {
+    static constexpr __m512i zero = {0, 0, 0, 0, 0, 0, 0, 0};
     __m512i m;
-    m512iWrapper(__m512i m) : m(m) {}
-    
-};
-
-//Really badly coded rn. Def fix
-struct m512i_arr {
-    static constexpr int default_size = 1;
-    __m512i* ptr;
-    int size=0, maxsize=default_size;
-    int offset=0;
-
-    m512i_arr();
-    m512i_arr(int msize);
-    m512i_arr(__m512i* ptr, int size): ptr(ptr), size(size), maxsize(size), offset(0) {};
-    m512i_arr(const m512i_arr& arr): ptr(arr.ptr), size(arr.size), maxsize(arr.maxsize), offset(arr.offset) {};
-    void push_back(__m512i val);
-    void free();
-    __m512i* get(int pos); //add overloading stuff to make it easier with []
-    __m512i* get_at_offset();
-    bool inc_offset();
+    m512iWrapper(__m512i m = zero) : m(m) {}
+    operator __m512i&() {return m;}
+    operator __m512i() const {return m;}
 };
 
 template<typename VT>
 using VSP_BTState = BTState<vsize_parallel_fusion_b_node<VT>, true>;
 
+//Currrently have you pass in a vector and then internally use vector iterator, but probably eventually better to just do it all with a generic InputIterator?
 template<typename VT>
 class VariableSizeParallelFusionBTree {
     private:
@@ -83,20 +70,26 @@ class VariableSizeParallelFusionBTree {
         vsize_parallel_fusion_b_node<VT> root;
         // ThreadedIdGenerator idgen;
         StripedLockTable lockTable;
-        void set_val_and_new_root(VSP_BTState<VT> state, m512i_arr key, VT val, int branch, size_t thread_id);
-        void insert(vsize_parallel_fusion_b_node<VT>* subroot, m512i_arr key, VT val, size_t threadId);
-        std::pair<VT, bool> new_root_pquery(VSP_BTState<VT> state, m512i_arr key, int branch, size_t threadId);
-        std::pair<VT, bool> pquery(m512i_arr key, vsize_parallel_fusion_b_node<VT>* subroot, size_t threadId);
+        template<class InputIterator>
+        void set_val_and_new_root(VSP_BTState<VT> state, InputIterator keyBegin, InputIterator keyEnd, VT val, int branch, size_t thread_id);
+        template<class InputIterator>
+        void insert(vsize_parallel_fusion_b_node<VT>* subroot, InputIterator keyBegin, InputIterator keyEnd, VT val, size_t threadId);
+        template<class InputIterator>
+        std::pair<VT, bool> new_root_pquery(VSP_BTState<VT> state, InputIterator keyBegin, InputIterator keyEnd, int branch, size_t threadId);
+        template<class InputIterator>
+        std::pair<VT, bool> pquery(InputIterator keyBegin, InputIterator keyEnd, vsize_parallel_fusion_b_node<VT>* subroot, size_t threadId);
 
     public:
         VariableSizeParallelFusionBTree(size_t numThreads);
         ~VariableSizeParallelFusionBTree();
-        void insert(m512i_arr key, VT val, size_t threadId) {
-            insert(&root, key, val, threadId);
+        template<class InputIterator>
+        void insert(InputIterator keyBegin, InputIterator keyEnd, VT val, size_t threadId) {
+            insert(&root, keyBegin, keyEnd, val, threadId);
         }
         //returning VT and whether that is actually a valid value, ie whether the key is in the database
-        std::pair<VT, bool> pquery(m512i_arr key, size_t threadId) {
-            return pquery(key, &root, threadId);
+        template<class InputIterator>
+        std::pair<VT, bool> pquery(InputIterator keyBegin, InputIterator keyEnd, size_t threadId) {
+            return pquery(keyBegin, keyEnd, &root, threadId);
         }
         // m512i_arr successor(m512i_arr key, size_t thread);
         // m512i_arr predecessor(m512i_arr key, size_t thread);
@@ -114,11 +107,13 @@ class VSBTreeThread {
 
     public:
         VSBTreeThread(VariableSizeParallelFusionBTree<VT>& tree, int threadId): tree(tree), threadId(threadId) {}
-        void insert(m512i_arr key, VT val) {
-            tree.insert(key, val, threadId);
+        template<class InputIterator>
+        void insert(InputIterator keyBegin, InputIterator keyEnd, VT val) {
+            tree.insert(keyBegin, keyEnd, val, threadId);
         }
-        std::pair<VT, bool> pquery(m512i_arr key) {
-            return tree.pquery(key, threadId);
+        template<class InputIterator>
+        std::pair<VT, bool> pquery(InputIterator keyBegin, InputIterator keyEnd) {
+            return tree.pquery(keyBegin, keyEnd, threadId);
         }
         // m512i_arr successor(m512i_arr key) {
         //     return tree.successor(key, threadId);
@@ -229,53 +224,6 @@ bool vsize_parallel_fusion_b_node<VT>::has_val(int pos) {
 }
 
 
-//Sus constructor cause not destructed that way? idk
-m512i_arr::m512i_arr(): m512i_arr{default_size} {
-}
-
-m512i_arr::m512i_arr(int msize) {
-    maxsize = msize;
-    ptr = static_cast<__m512i*> (std::aligned_alloc(64, 64*maxsize));
-    size = 0;
-    offset = 0;
-}
-
-void m512i_arr::push_back(__m512i val) {
-    if(maxsize < 0) return;
-    if(size < maxsize) {
-        ptr[size++] = val;
-    }
-    else {
-        //kinda meh
-        maxsize*=2;
-        __m512i* nptr = static_cast<__m512i*> (std::aligned_alloc(64, 64*maxsize));
-        memcpy(nptr, ptr, 64*maxsize);
-        std::free(ptr);
-        ptr = nptr;
-    }
-}
-
-void m512i_arr::free() {
-    std::free(ptr);
-    maxsize = -1;
-}
-
-__m512i* m512i_arr::get(int pos) {
-    if(pos < 0 || pos >= size) return NULL;
-    return &ptr[pos];
-}
-
-__m512i* m512i_arr::get_at_offset() {
-    if(offset < 0 || offset >= size) return NULL;
-    return &ptr[offset];
-}
-
-bool m512i_arr::inc_offset(){
-    offset++;
-    return offset < size;
-}
-
-
 
 
 //Maybe the fullkey stuff should be handled by the fusion_tree code directly since the structure "belongs" to it? As in inserting a blank space for it, here we would populate it obviously
@@ -337,9 +285,10 @@ VariableSizeParallelFusionBTree<VT>::~VariableSizeParallelFusionBTree() {
 }
 
 template<typename VT>
-void VariableSizeParallelFusionBTree<VT>::set_val_and_new_root(VSP_BTState<VT> state, m512i_arr key, VT val, int branch, size_t thread_id) {
+template<class InputIterator>
+void VariableSizeParallelFusionBTree<VT>::set_val_and_new_root(VSP_BTState<VT> state, InputIterator keyBegin, InputIterator keyEnd, VT val, int branch, size_t thread_id) {
     //If key already there, then this just overwrites the val, I suppose?
-    if (!key.inc_offset()) {
+    if ((++keyBegin) == keyEnd) {
         // cout << "Inserting val " << val << " into node " << state.cur->id << endl;
         // cout << "Full key: " << state.cur->fusion_internal_tree.tree.meta.fullkey << endl;
         state.cur->set_val(val, branch);
@@ -354,15 +303,17 @@ void VariableSizeParallelFusionBTree<VT>::set_val_and_new_root(VSP_BTState<VT> s
         }
         vsize_parallel_fusion_b_node<VT>* new_root = state.cur->subtree_roots[branch];
         state.write_unlock_both();
-        return insert(new_root, key, val, thread_id);
+        return insert(new_root, keyBegin, keyEnd, val, thread_id);
     }
 }
 
 //keep track of how many times we "restart" in the tree?
 template<typename VT>
-void VariableSizeParallelFusionBTree<VT>::insert(vsize_parallel_fusion_b_node<VT>* subroot, m512i_arr key, VT val, size_t thread_id) {
+template<class InputIterator>
+void VariableSizeParallelFusionBTree<VT>::insert(vsize_parallel_fusion_b_node<VT>* subroot, InputIterator keyBegin, InputIterator keyEnd, VT val, size_t thread_id) {
     // cout << "Called with " << key.offset << " " << key.size << ", root id: " << root->id << endl;
-    __m512i* curkey = key.get_at_offset();
+    assert(keyBegin != keyEnd);
+    __m512i curkey = *keyBegin;
 
     while (true) {
         VSP_BTState<VT> state(subroot, numThreads, thread_id, &lockTable); //Maybe set depth to something nicer?
@@ -375,20 +326,20 @@ void VariableSizeParallelFusionBTree<VT>::insert(vsize_parallel_fusion_b_node<VT
                 // return insert(root, key, val, thread_id);
                 break;
             }
-            int branch = query_branch_node(&state.cur->fusion_internal_tree, *curkey);
+            int branch = query_branch_node(&state.cur->fusion_internal_tree, curkey);
             if(branch < 0) { 
                 branch = ~branch;
                 if(state.try_upgrade_reverse_order())
-                    return set_val_and_new_root(state, key, val, branch, thread_id);
+                    return set_val_and_new_root(state, keyBegin, keyEnd, val, branch, thread_id);
                 // return insert(root, key, val, thread_id);
                 break;
             }
             if(state.cur->children[branch] == NULL) {
-                if(state.try_insert_key(*curkey, false)) {
-                    int branch = ~query_branch_node(&state.cur->fusion_internal_tree, *curkey);
+                if(state.try_insert_key(curkey, false)) {
+                    int branch = ~query_branch_node(&state.cur->fusion_internal_tree, curkey);
                     // print_vec(state.cur->fusion_internal_tree.keys[0], true);
                     state.cur->finish_key_insert(branch);
-                    return set_val_and_new_root(state, key, val, branch, thread_id);
+                    return set_val_and_new_root(state, keyBegin, keyEnd, val, branch, thread_id);
                 }
                 // return insert(root, key, val, thread_id);
                 break;
@@ -412,10 +363,11 @@ void VariableSizeParallelFusionBTree<VT>::insert(vsize_parallel_fusion_b_node<VT
 // }
 
 template<typename VT>
-std::pair<VT, bool> VariableSizeParallelFusionBTree<VT>::new_root_pquery(VSP_BTState<VT> state, m512i_arr key, int branch, size_t threadId) {
+template<class InputIterator>
+std::pair<VT, bool> VariableSizeParallelFusionBTree<VT>::new_root_pquery(VSP_BTState<VT> state, InputIterator keyBegin, InputIterator keyEnd, int branch, size_t threadId) {
     // cout << "Got here at least" << endl;
     //If key already there, then this just overwrites the val, I suppose?
-    if (!key.inc_offset()) {
+    if ((++keyBegin) == keyEnd) {
         // cout << "WTF2" << endl;
         if(state.cur->has_val(branch)) {
             // std::cout << "Getting t from branch " << branch << endl;
@@ -433,14 +385,16 @@ std::pair<VT, bool> VariableSizeParallelFusionBTree<VT>::new_root_pquery(VSP_BTS
         }
         vsize_parallel_fusion_b_node<VT>* new_root = state.cur->subtree_roots[branch];
         state.read_unlock_both();
-        return pquery(key, new_root, threadId);
+        return pquery(keyBegin, keyEnd, new_root, threadId);
     }
 }
 
 template<typename VT>
-std::pair<VT, bool> VariableSizeParallelFusionBTree<VT>::pquery(m512i_arr key, vsize_parallel_fusion_b_node<VT>* subroot, size_t threadId) {
+template<class InputIterator>
+std::pair<VT, bool> VariableSizeParallelFusionBTree<VT>::pquery(InputIterator keyBegin, InputIterator keyEnd, vsize_parallel_fusion_b_node<VT>* subroot, size_t threadId) {
     // cout << "Called with " << key.offset << " " << key.size << ", root id: " << subroot->id << endl;
-    __m512i* curkey = key.get_at_offset();
+    assert(keyBegin != keyEnd);
+    __m512i curkey = *keyBegin;
 
     while(true) {
         VSP_BTState<VT> state(subroot, numThreads, threadId, &lockTable); //This was root before and taking the element in the class causing problems. Like be consistent with naming or figure out another way to not have this particular problem
@@ -448,10 +402,10 @@ std::pair<VT, bool> VariableSizeParallelFusionBTree<VT>::pquery(m512i_arr key, v
         // print_vec(*curkey, true);
 
         while(true) {
-            int branch = query_branch_node(&state.cur->fusion_internal_tree, *curkey);
+            int branch = query_branch_node(&state.cur->fusion_internal_tree, curkey);
             if(branch < 0) { 
                 branch = ~branch;
-                return new_root_pquery(state, key, branch, threadId);
+                return new_root_pquery(state, keyBegin, keyEnd, branch, threadId);
             }
             if(state.cur->children[branch] == NULL) { //haven't found an exact match for our portion of the key in the tree, so we know that the query is false
                 // cout << "WTF" << endl;
