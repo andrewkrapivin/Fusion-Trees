@@ -97,8 +97,8 @@ class SimpleLockHashTable {
         size_t numBits;
         std::vector<LockUnit> writeLocks;
         std::vector<LockUnit> readLocks;
-        // SimpleHashFunction hashFunc;
-        BasicHashFunction hashFunc;
+        SimpleHashFunction hashFunc;
+        // BasicHashFunction hashFunc;
         void getWriteLock(size_t id);
         TryLockPossibilities tryGetWriteLock(size_t id);
         void waitForReadLocks(size_t id);

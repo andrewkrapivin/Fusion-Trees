@@ -6,35 +6,57 @@
 #include <bitset>
 #include "BTreeHelper.hpp"
 
+atomic<uint64_t> numBad{0};
+atomic<uint64_t> numBadWithMultiplicity{0};
+
 //keep track of how many times we "restart" in the tree
 template<typename NodeName, bool useLock, bool useHashLock>
 void parallel_insert_full_tree_DLock(BTState<NodeName, useLock, useHashLock> state, __m512i key) {
     // assert(root != NULL);
 
-    NodeName* root = state.cur; //not great should fix later
-
+    // BTState<NodeName, useLock, useHashLock> stateCpy = state;
+    NodeName* root = state.cur;
+    uint64_t count = 0;
+    bool bad = false;
     while(true) {
-        if(state.split_if_needed()) {
-            // std::cout << "NANDE " << std::endl;
-            return parallel_insert_full_tree_DLock<NodeName, useLock, useHashLock>(BTState<NodeName, useLock, useHashLock>{root, state.numThreads, state.threadId, state.lockTable, state.idGen}, key);
-            // std::cout << "NANDE2" << std::endl;
-        }
-        int branch = query_branch_node(&state.cur->fusion_internal_tree, key);
-        if(branch < 0) { //say exact match just return & do nothing
-            state.read_unlock_both();
-            return;
-        }
-        if(state.cur->children[branch] == NULL) {
-            if(state.try_insert_key(key)) {
+        // state = stateCpy;
+        state = BTState<NodeName, useLock, useHashLock>{root, state.numThreads, state.threadId, state.lockTable, state.idGen};
+         //not great should fix later
+
+        while(true) {
+            if(state.split_if_needed()) {
+                // std::cout << "NANDE " << std::endl;
+                // return parallel_insert_full_tree_DLock<NodeName, useLock, useHashLock>(BTState<NodeName, useLock, useHashLock>{root, state.numThreads, state.threadId, state.lockTable, state.idGen}, key);
+                // std::cout << "NANDE2" << std::endl;
+                break;
+            }
+            int branch = query_branch_node(&state.cur->fusion_internal_tree, key);
+            if(branch < 0) { //say exact match just return & do nothing
+                state.read_unlock_both();
                 return;
             }
-            // std::cout << "NANDE3" << std::endl;
-            return parallel_insert_full_tree_DLock<NodeName, useLock, useHashLock>(BTState<NodeName, useLock, useHashLock>{root, state.numThreads, state.threadId, state.lockTable, state.idGen}, key);
+            if(state.cur->children[branch] == NULL) {
+                if(state.try_insert_key(key)) {
+                    // if(bad) {
+                    //     cout << (numBad++) << " " << numBadWithMultiplicity << endl;
+                    // }
+                    return;
+                }
+                // std::cout << "NANDE3" << std::endl;
+                // return parallel_insert_full_tree_DLock<NodeName, useLock, useHashLock>(BTState<NodeName, useLock, useHashLock>{root, state.numThreads, state.threadId, state.lockTable, state.idGen}, key);
+                break;
+            }
+            if(!state.try_HOH_readlock(state.cur->children[branch])) {
+                // std::cout << "NANDE4" << std::endl;
+                // return parallel_insert_full_tree_DLock<NodeName, useLock, useHashLock>(BTState<NodeName, useLock, useHashLock>{root, state.numThreads, state.threadId, state.lockTable, state.idGen}, key);
+                break;
+            }
         }
-        if(!state.try_HOH_readlock(state.cur->children[branch])) {
-            // std::cout << "NANDE4" << std::endl;
-            return parallel_insert_full_tree_DLock<NodeName, useLock, useHashLock>(BTState<NodeName, useLock, useHashLock>{root, state.numThreads, state.threadId, state.lockTable, state.idGen}, key);
-        }
+        // count++;
+        // if(count > 1000) {
+        //     bad = true;
+        //     numBadWithMultiplicity++;
+        // }
     }
 }
 
