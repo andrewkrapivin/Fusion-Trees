@@ -21,7 +21,6 @@
 #include "../src/FusionBTree.h"
 #include "../src/VariableSizeFusionBTree.hpp"
 #include "../src/FusionQSort.h"
-#include "../src/lock.h"
 #include "../src/BenchHelper.hpp"
 
 // template<typename VT>

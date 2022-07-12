@@ -5,7 +5,6 @@
 #include <cstdint>
 #include <iostream>
 #include <fstream>
-#include "lock.h"
 #include "fusion_tree.h"
 #include "HashLocks.hpp"
 #include "ThreadedIdGenerator.hpp"

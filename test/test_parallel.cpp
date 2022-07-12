@@ -21,7 +21,6 @@
 #include "../src/FusionBTree.h"
 #include "../src/VariableSizeFusionBTree.hpp"
 #include "../src/FusionQSort.h"
-#include "../src/lock.h"
 #include "../src/BenchHelper.hpp"
 
 void parallel_insert_items(ParallelFusionBTreeThread pft, __m512i items[], size_t num) {

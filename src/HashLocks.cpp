@@ -126,19 +126,19 @@ TryLockPossibilities SimpleLockHashTable::tryWriteLock(size_t id) {
 
 void SimpleLockHashTable::partialUpgrade(size_t id, size_t threadId) {
     getWriteLock(id);
-    readUnlock(id, threadId);
+    readUnlock(threadId);
 }
 
 TryLockPossibilities SimpleLockHashTable::tryPartialUpgrade(size_t id, size_t threadId, bool unlockOnFail) {
     TryLockPossibilities retval = tryGetWriteLock(id);
     if(retval != TryLockPossibilities::Success) {
         if(unlockOnFail) {
-            readUnlock(id, threadId);
+            readUnlock(threadId);
         }
         return retval;
     }
 
-    readUnlock(id, threadId);
+    readUnlock(threadId);
     return TryLockPossibilities::Success;
 }
 
@@ -187,7 +187,7 @@ void SimpleLockHashTable::partialUpgradeUnlock(size_t id) {
     writeUnlock(id);
 }
 
-void SimpleLockHashTable::readUnlock(size_t id, size_t threadId) {
+void SimpleLockHashTable::readUnlock(size_t threadId) {
     readLocks[threadId].lockId.store(0, std::memory_order_release);
 }
 
@@ -205,12 +205,12 @@ LockHashTable::HashIds::HashIds(LockHashTable* h, size_t id) {
 
     lockWriteLockEntry = h->hashFunc(id);
     // std::cout << "lwle: " << lockWriteLockEntry << ", s: " << h->lockWriteLocks.size() << ", nwb: " << h->numWriteBits << std::endl;
-    assert(lockWriteLockEntry >= 0 && lockWriteLockEntry < h->lockWriteLocks.size());
+    // assert(lockWriteLockEntry >= 0 && lockWriteLockEntry < h->lockWriteLocks.size());
     readLockEntry = (lockWriteLockEntry & ((1ull << h->numReadBits) - 1)) * h->associativityCacheLines;
-    assert(readLockEntry >= 0 && readLockEntry < h->readLocks[0].size());
+    // assert(readLockEntry >= 0 && readLockEntry < h->readLocks[0].size());
     // assert(readLockEntry == 0);
     writeLockEntry = lockWriteLockEntry * h->associativityCacheLines;
-    assert(writeLockEntry >= 0 && writeLockEntry < h->writeLocks.size());
+    // assert(writeLockEntry >= 0 && writeLockEntry < h->writeLocks.size());
     // assert(writeLockEntry == 0);
 }
 
@@ -736,7 +736,7 @@ void HashMutex::partialUpgradeUnlock() {
 }
 
 void HashMutex::readUnlock(size_t threadId) {
-    table->readUnlock(id, threadId);
+    table->readUnlock(threadId);
 }
 
 size_t HashMutex::getId() {

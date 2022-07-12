@@ -116,7 +116,7 @@ class SimpleLockHashTable {
         TryLockPossibilities tryReadLock(size_t id, size_t threadId);
         void writeUnlock(size_t id);
         void partialUpgradeUnlock(size_t id);
-        void readUnlock(size_t id, size_t threadId);
+        void readUnlock(size_t threadId);
 };
 
 //Build in scheme to rebuild the hash table? Cause honestly probably most of the time you have the LocksBusy thing happen the locks you use later change and so its all good, but sometimes its gonna be two popular locks colliding, and then I'd imagine that's a problem.
