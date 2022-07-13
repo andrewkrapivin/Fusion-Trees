@@ -22,6 +22,7 @@
 #include "../src/VariableSizeFusionBTree.hpp"
 #include "../src/FusionQSort.h"
 #include "../src/BenchHelper.hpp"
+#include "../src/PrefetchBTree.hpp"
 
 void parallel_insert_items(ParallelFusionBTreeThread pft, __m512i items[], size_t num) {
     for(size_t i = 0; i < num; i++) {
@@ -30,10 +31,26 @@ void parallel_insert_items(ParallelFusionBTreeThread pft, __m512i items[], size_
     }
 }
 
+void prefetchInsertItems(ParallelBTreeThread pbt, __m512i items[], size_t num) {
+    for(size_t i = 0; i < num; i++) {
+        // cout << i << endl;
+        pbt.insert(items[i]);
+    }
+}
+
 template<bool chk = false>
 void parallel_succ_items(ParallelFusionBTreeThread pft, __m512i items[], size_t num) {
     for(size_t i = 0; i < num; i++) {
         __m512i* test = pft.successor(items[i]);
+        if constexpr (chk) assert(i >=num-2 || first_diff_bit_pos(*test, items[i+1]) == -1);
+    }
+}
+
+template<bool chk = false>
+void prefetchSuccessorQueries(ParallelBTreeThread pbt, __m512i items[], size_t num) {
+    for(size_t i = 0; i < num; i++) {
+        __m512i* test = pbt.successor(items[i]);
+        //cout << "succ " << (i+1) << endl;
         if constexpr (chk) assert(i >=num-2 || first_diff_bit_pos(*test, items[i+1]) == -1);
     }
 }
@@ -58,8 +75,7 @@ int main(int argc, char** argv) {
     size_t numThreads = 1;
     if(argc >= 3)
         numThreads = atoi(argv[2]);
-
-    // parallel_fusion_b_node* root = new parallel_fusion_b_node(numThreads);
+    
     ParallelFusionBTree pft{numThreads};
     vector<ParallelFusionBTreeThread> pftThreads;
     for(size_t i{0}; i < numThreads; i++) {
@@ -77,6 +93,12 @@ int main(int argc, char** argv) {
     }
 
     BenchHelper bench(numThreads);
+    
+    ParallelBTree pbt{numThreads};
+    vector<ParallelBTreeThread> pbtThreads;
+    for(size_t i{0}; i < numThreads; i++) {
+        pbtThreads.push_back(ParallelBTreeThread{pbt, i});
+    }
 
     for(size_t i = 0; i < numThreads; i++) {
         bench.addFunctionForThreadTest([=] () -> void {
@@ -84,12 +106,24 @@ int main(int argc, char** argv) {
         });
     }
     bench.timeThreadedFunction("parallel insert");
+    
+    for(size_t i = 0; i < numThreads; i++) {
+        bench.addFunctionForThreadTest([=] () -> void {
+            prefetchInsertItems(pbtThreads[i], big_randomlist+indices[i], indices[i+1]-indices[i]);
+        });
+    }
+    bench.timeThreadedFunction("parallel prefetch insert");
 
     // exit(0);
 
     bench.timeFunction([&] ()-> void {
         sort(big_randomlist, big_randomlist+bigtestsize, fast_compare__m512i);
     }, "sort on big keys");
+    
+    for(size_t i = 0; i < numThreads; i++) {
+        bench.addFunctionForThreadTest([=] () -> void { prefetchSuccessorQueries<true>(pbtThreads[i], big_randomlist+indices[i], indices[i+1]-indices[i]);});
+    }
+    bench.timeThreadedFunction("parallel prefetch successor sorted");
 
     for(size_t i = 0; i < numThreads; i++) {
         bench.addFunctionForThreadTest([=] () -> void { parallel_succ_items<true>(pftThreads[i], big_randomlist+indices[i], indices[i+1]-indices[i]);});
@@ -99,10 +133,14 @@ int main(int argc, char** argv) {
     shuffle(big_randomlist, big_randomlist+bigtestsize, generator);
 
     for(size_t i = 0; i < numThreads; i++) {
+        bench.addFunctionForThreadTest([=] () -> void { prefetchSuccessorQueries(pbtThreads[i], big_randomlist+indices[i], indices[i+1]-indices[i]);});
+    }
+    bench.timeThreadedFunction("parallel prefetch successor random");
+
+    for(size_t i = 0; i < numThreads; i++) {
         bench.addFunctionForThreadTest([=] () -> void { parallel_succ_items(pftThreads[i], big_randomlist+indices[i], indices[i+1]-indices[i]);});
     }
     bench.timeThreadedFunction("parallel successor random");
-
 
     for(size_t i = 0; i < numThreads; i++) {
         bench.addFunctionForThreadTest([=] () -> void { parallel_pred_items(pftThreads[i], big_randomlist+indices[i], indices[i+1]-indices[i]);});
