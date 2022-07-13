@@ -9,6 +9,10 @@
 atomic<uint64_t> numBad{0};
 atomic<uint64_t> numBadWithMultiplicity{0};
 
+//Test out if an MLP version of just regular binary search trees can do better than this.
+//Basically have say a B-tree with six or seven keys, and then an extra cache line or two for like metadata or whatever
+//Prefetch the entire thing every time, and just use basic comparison to see which path to go down
+
 //keep track of how many times we "restart" in the tree
 template<typename NodeName, bool useLock>
 void parallel_insert_full_tree_DLock(BTState<NodeName, useLock> state, __m512i key) {

@@ -61,7 +61,9 @@ class BasicHashFunction {
         static constexpr size_t keySize = 8; //Idk why I have this. if care about key size prob better to template or make it in constructor
         size_t numBits;
         size_t numBytes;
-        std::vector<std::array<std::array<unsigned char, 256>, keySize>> shuffleBytes; //actually ridiculous
+        size_t modval;
+        // std::vector<std::array<std::array<unsigned char, 256>, keySize>> shuffleBytes; //actually ridiculous
+        std::array<std::array<uint64_t, 256>, keySize> shuffleBytes;
     
     public:
         BasicHashFunction(size_t numBits);
@@ -97,8 +99,8 @@ class SimpleLockHashTable {
         size_t numBits;
         std::vector<LockUnit> writeLocks;
         std::vector<LockUnit> readLocks;
-        SimpleHashFunction hashFunc;
-        // BasicHashFunction hashFunc;
+        // SimpleHashFunction hashFunc;
+        BasicHashFunction hashFunc;
         void getWriteLock(size_t id);
         TryLockPossibilities tryGetWriteLock(size_t id);
         void waitForReadLocks(size_t id);
@@ -112,6 +114,7 @@ class SimpleLockHashTable {
         void partialUpgrade(size_t id, size_t threadId);
         TryLockPossibilities tryPartialUpgrade(size_t id, size_t threadId, bool unlockOnFail = true);
         void finishPartialUpgrade(size_t id);
+        void downgrade(size_t id, size_t threadId); //converts writelock to readlock
         void readLock(size_t id, size_t threadId);
         TryLockPossibilities tryReadLock(size_t id, size_t threadId);
         void writeUnlock(size_t id);

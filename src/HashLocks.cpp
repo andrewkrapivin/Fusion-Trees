@@ -5,24 +5,29 @@
 #include <immintrin.h>
 #include <cassert>
 
-BasicHashFunction::BasicHashFunction(size_t numBits): numBits{numBits}, numBytes{(numBits+7)/8}, shuffleBytes{numBytes} {
+BasicHashFunction::BasicHashFunction(size_t numBits): numBits{numBits}, numBytes{(numBits+7)/8} {
     //Since this hash function is crazy let's also go nuts with randomness. Have no idea whether rd actually has enough entropy for this to give any benefit, so whatever. Let's also add the clock to it then.
     std::random_device rd;
     std::seed_seq seed{rd(), rd(), rd(), rd(), rd()}; // std::chrono::steady_clock::now().time_since_epoch().count()
     std::mt19937 generator{seed};
     // std::uniform_int_distribution dist{0, 255};
-    for(auto& a: shuffleBytes) {
-        for(auto& b: a) {
-            //Should this be a permutation of 0-255 or just random bytes? Probably shuffle is a little better but a little less entropy but then might not even use all the bits so not a real diff? Idk
-            std::array<unsigned char, 256> permutation;
-            for(size_t i{0}; i < 256; i++) permutation[i] = i;
-            std::shuffle(permutation.begin(), permutation.end(), generator);
-            b = permutation;
-            // for(size-t i{0}; i < 256; i++) {
-            //     // a[i] = dist(generator);
-            // }
+    // for(auto& a: shuffleBytes) {
+    for(auto& b: shuffleBytes) {
+        //Should this be a permutation of 0-255 or just random bytes? Probably shuffle is a little better but a little less entropy but then might not even use all the bits so not a real diff? Idk
+        // std::array<unsigned char, 256> permutation;
+        // for(size_t i{0}; i < 256; i++) permutation[i] = i;
+        // std::shuffle(permutation.begin(), permutation.end(), generator);
+        // b = permutation;
+        std::uniform_int_distribution<uint64_t> dist{0ull, -1ull};
+        for(size_t i{0}; i < 256; i++) {
+            b[i] = dist(generator);
         }
+        // for(size-t i{0}; i < 256; i++) {
+        //     // a[i] = dist(generator);
+        // }
     }
+    // }
+    modval = (1ull << numBits) - 1;
 }
 
 //seriously this needs to be made at least more efficient
@@ -31,14 +36,15 @@ uint64_t BasicHashFunction::getBits(uint64_t id) {
 
     std::array<unsigned char, keySize> entriesToShuffle = std::bit_cast<std::array<unsigned char, keySize>, uint64_t>(id); //Wack this bit_cast thing is.
 
-    uint64_t shift = 0;
-    for(auto a: shuffleBytes) {
-        for(size_t i{0}; i < keySize; i++) {
-            res ^= a[i][entriesToShuffle[i]] << shift;
-        }
-        shift+=8;
+    // uint64_t shift = 0;
+    // for(auto a: shuffleBytes) {
+    for(size_t i{0}; i < keySize; i++) {
+        // res ^= a[i][entriesToShuffle[i]] << shift;
+        res ^= shuffleBytes[i][entriesToShuffle[i]];
     }
-    res &= (1ull << numBits) - 1;
+    // shift+=8;
+    // }
+    res &= modval;
     // std::cout << res << std::endl;
     return res;
 }
