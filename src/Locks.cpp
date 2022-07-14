@@ -84,18 +84,18 @@ void ReadWriteMutex::finishPartialUpgrade() {
 
 void ReadWriteMutex::readLock(size_t threadId) {
     // std::cout << "HELLO2 " << threadId << std::endl;
-    rlUnits[threadId].lockId.store(1, std::memory_order_release);
+    rlUnits[threadId].lockId.store(1, std::memory_order_seq_cst);
 
     while(wlUnit.lockId.load(std::memory_order_acquire) != 0) {
         rlUnits[threadId].lockId.store(0, std::memory_order_relaxed);
         while(wlUnit.lockId.load(std::memory_order_relaxed) != 0);
-        rlUnits[threadId].lockId.store(1, std::memory_order_release);
+        rlUnits[threadId].lockId.store(1, std::memory_order_seq_cst);
     }
     // std::cout << "BYE2" << std::endl;
 }
 
 bool ReadWriteMutex::tryReadLock(size_t threadId) {
-    rlUnits[threadId].lockId.store(1, std::memory_order_release);
+    rlUnits[threadId].lockId.store(1, std::memory_order_seq_cst);
 
     // std::cout << "HELLO5 " << threadId << std::endl;
 
