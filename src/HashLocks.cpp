@@ -157,11 +157,11 @@ void SimpleLockHashTable::readLock(size_t id, size_t threadId) {
     LockUnit& wlUnit = writeLocks[windex];
     LockUnit& rlUnit = readLocks[threadId];
 
-    rlUnit.lockId.store(id, std::memory_order_release);
-    while(wlUnit.lockId.load(std::memory_order_acquire) == id) {
+    rlUnit.lockId.load(std::memory_order_seq_cst);
+    while(wlUnit.lockId.load(std::memory_order_relaxed) == id) {
         rlUnit.lockId.store(0, std::memory_order_relaxed);
         while(wlUnit.lockId.load(std::memory_order_relaxed) == id);
-        rlUnit.lockId.store(id, std::memory_order_release);
+        rlUnit.lockId.load(std::memory_order_seq_cst);
     }
 }
 
@@ -170,10 +170,9 @@ TryLockPossibilities SimpleLockHashTable::tryReadLock(size_t id, size_t threadId
     LockUnit& wlUnit = writeLocks[windex];
     LockUnit& rlUnit = readLocks[threadId];
 
-    rlUnit.lockId.store(id, std::memory_order_release);
-    uint64_t cId = wlUnit.lockId.load(std::memory_order_acquire);
-    if(cId == id) {
-        rlUnit.lockId.store(0, std::memory_order_release);
+    rlUnit.lockId.load(std::memory_order_seq_cst);
+    if(wlUnit.lockId.load(std::memory_order_relaxed) == id) {
+        rlUnit.lockId.store(0, std::memory_order_relaxed);
         // if(cId == id)
         //     return TryLockPossibilities::WriteLocked;
         // return TryLockPossibilities::LocksBusy;
